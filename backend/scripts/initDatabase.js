@@ -2,7 +2,10 @@ const db = require('../database/config');
 
 async function initDatabase() {
     try {
-        await db.connect();
+        // Don't connect here if already connected (for tests)
+        if (!db.db) {
+            await db.connect();
+        }
         
         // Create users table
         await db.run(`
@@ -36,10 +39,11 @@ async function initDatabase() {
         console.log('Database initialized successfully!');
         console.log('Tables created: users, puzzles');
         
+        return true;
+        
     } catch (error) {
         console.error('Error initializing database:', error);
-    } finally {
-        db.close();
+        throw error;
     }
 }
 

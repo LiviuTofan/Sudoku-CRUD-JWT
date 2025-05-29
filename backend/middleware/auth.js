@@ -1,88 +1,138 @@
-import jwt from 'jsonwebtoken';
+const JWTUtils = require('../utils/jwt');
+const { PermissionManager, PERMISSIONS } = require('../config/permissions');
+const User = require('../models/User');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'sudoku_secret_key_2024';
+// JWT Authentication Middleware
+const authenticateToken = async (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
-/**
- * Middleware to verify JWT token
- */
-export const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-  if (!token) {
-    return res.status(401).json({ 
-      error: 'Access token required',
-      message: 'Please provide a valid JWT token in Authorization header'
-    });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) {
-      if (err.name === 'TokenExpiredError') {
+    if (!token) {
         return res.status(401).json({ 
-          error: 'Token expired',
-          message: 'Your session has expired. Please get a new token.'
+            error: 'Access token required',
+            code: 'TOKEN_REQUIRED'
         });
-      }
-      return res.status(403).json({ 
-        error: 'Invalid token',
-        message: 'The provided token is invalid.'
-      });
     }
 
-    req.user = decoded;
-    next();
-  });
+    try {
+        const decoded = JWTUtils.verify(token);
+        
+        // Optionally verify user still exists in database
+        const user = await User.findById(decoded.id);
+        if (!user) {
+            return res.status(401).json({ 
+                error: 'User not found',
+                code: 'USER_NOT_FOUND'
+            });
+        }
+
+        req.user = {
+            id: decoded.id,
+            username: decoded.username,
+            role: decoded.role
+        };
+        
+        next();
+    } catch (error) {
+        return res.status(403).json({ 
+            error: error.message,
+            code: 'TOKEN_INVALID'
+        });
+    }
 };
 
-/**
- * Middleware to check specific permissions
- */
-export const requirePermission = (permission) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ 
-        error: 'Authentication required',
-        message: 'Please authenticate first'
-      });
+// Optional Authentication (doesn't fail if no token)
+const optionalAuth = async (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        req.user = { role: 'visitor' }; // Set as visitor if no token
+        return next();
     }
 
-    const userPermissions = req.user.permissions || [];
+    try {
+        const decoded = JWTUtils.verify(token);
+        const user = await User.findById(decoded.id);
+        
+        req.user = user ? {
+            id: decoded.id,
+            username: decoded.username,
+            role: decoded.role
+        } : { role: 'visitor' };
+        
+    } catch (error) {
+        req.user = { role: 'visitor' }; // Set as visitor if invalid token
+    }
     
-    if (!userPermissions.includes(permission)) {
-      return res.status(403).json({ 
-        error: 'Insufficient permissions',
-        message: `This operation requires '${permission}' permission`,
-        required: permission,
-        current: userPermissions
-      });
-    }
-
     next();
-  };
 };
 
-/**
- * Middleware to check specific role
- */
-export const requireRole = (role) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ 
-        error: 'Authentication required',
-        message: 'Please authenticate first'
-      });
-    }
+// Permission checking middleware
+const requirePermission = (permission, resource = null) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ 
+                error: 'Authentication required',
+                code: 'AUTH_REQUIRED'
+            });
+        }
 
-    if (req.user.role !== role) {
-      return res.status(403).json({ 
-        error: 'Insufficient role',
-        message: `This operation requires '${role}' role`,
-        required: role,
-        current: req.user.role
-      });
-    }
+        const hasPermission = PermissionManager.hasPermission(
+            req.user.role, 
+            permission, 
+            resource
+        );
 
-    next();
-  };
+        if (!hasPermission) {
+            return res.status(403).json({ 
+                error: 'Insufficient permissions',
+                code: 'INSUFFICIENT_PERMISSIONS',
+                required: permission,
+                userRole: req.user.role
+            });
+        }
+
+        next();
+    };
+};
+
+// Role checking middleware
+const requireRole = (roles) => {
+    const roleArray = Array.isArray(roles) ? roles : [roles];
+    
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ 
+                error: 'Authentication required',
+                code: 'AUTH_REQUIRED'
+            });
+        }
+
+        if (!roleArray.includes(req.user.role)) {
+            return res.status(403).json({ 
+                error: 'Insufficient role permissions',
+                code: 'INSUFFICIENT_ROLE',
+                required: roleArray,
+                userRole: req.user.role
+            });
+        }
+
+        next();
+    };
+};
+
+// Admin only middleware
+const requireAdmin = requireRole('admin');
+
+// User or Admin middleware
+const requireUserOrAdmin = requireRole(['user', 'admin']);
+
+module.exports = {
+    authenticateToken,
+    optionalAuth,
+    requirePermission,
+    requireRole,
+    requireAdmin,
+    requireUserOrAdmin
 };
