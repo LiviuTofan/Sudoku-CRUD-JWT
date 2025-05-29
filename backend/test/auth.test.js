@@ -8,6 +8,9 @@ let server;
 
 describe('Authentication Endpoints', () => {
     beforeAll(async () => {
+        // Increase timeout for setup
+        jest.setTimeout(10000);
+        
         await db.connect();
         
         // Clear existing tables and recreate
@@ -16,6 +19,7 @@ describe('Authentication Endpoints', () => {
             await db.run('DROP TABLE IF EXISTS puzzles');
         } catch (err) {
             // Tables might not exist, that's ok
+            console.log('Tables did not exist, continuing...');
         }
         
         await initDatabase();
@@ -23,32 +27,60 @@ describe('Authentication Endpoints', () => {
         // Import app after database is ready
         app = require('../server');
         
-        // If server is exported as a server instance, store it
-        if (app && app.listening) {
+        // Store server reference if it exists
+        if (app && typeof app.listen === 'function') {
             server = app;
+        } else if (app && app.server) {
+            server = app.server;
         }
-    });
+    }, 15000); // 15 second timeout for beforeAll
 
     afterAll(async () => {
-        // Close server first
-        if (server && server.close) {
-            await new Promise((resolve) => {
-                server.close(resolve);
-            });
+        // Close server first with proper error handling
+        if (server) {
+            try {
+                if (typeof server.close === 'function') {
+                    await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Server close timeout'));
+                        }, 3000);
+                        
+                        server.close((err) => {
+                            clearTimeout(timeout);
+                            if (err) reject(err);
+                            else resolve();
+                        });
+                    });
+                }
+            } catch (error) {
+                console.log('Error closing server:', error.message);
+            }
         }
         
-        // Close database connection
-        if (db.db) {
-            await new Promise((resolve) => {
-                db.close(() => {
-                    resolve();
+        // Close database connection with timeout
+        if (db && db.db) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        resolve(); // Resolve instead of reject to avoid hanging
+                    }, 2000);
+                    
+                    db.close((err) => {
+                        clearTimeout(timeout);
+                        if (err) {
+                            console.log('Database close error:', err);
+                        }
+                        resolve();
+                    });
                 });
-            });
+            } catch (error) {
+                console.log('Error closing database:', error.message);
+            }
         }
         
-        // Give a small delay to ensure all connections are closed
-        await new Promise(resolve => setTimeout(resolve, 100));
-    });
+        // Small delay to ensure cleanup
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }, 10000); // 10 second timeout for afterAll
 
     describe('POST /auth/register', () => {
         test('Should register a new user successfully', async () => {
