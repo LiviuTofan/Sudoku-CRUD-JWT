@@ -1,0 +1,18 @@
+.difficulty-selector {
+    margin-right: 15px;
+  }
+  
+  .difficulty-select {
+    padding: 8px 15px;
+    font-size: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background-color: var(--cell-bg);
+    color: var(--text-color);
+    cursor: pointer;
+  }
+  
+  .difficulty-select:focus {
+    outline: none;
+    border-color: var(--highlight-color);
+  }
