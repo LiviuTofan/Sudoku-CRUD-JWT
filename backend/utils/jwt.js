@@ -1,56 +1,68 @@
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+// ============================================
+// config/permissions.js - SIMPLIFIED
+// ============================================
+const ROLES = {
+    ADMIN: 'admin',
+    USER: 'user',
+    VISITOR: 'visitor'
+};
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+const PERMISSIONS = {
+    READ: 'read',
+    WRITE: 'write',
+    DELETE: 'delete'
+};
+
+// Simple role-permission mapping
+const ROLE_PERMISSIONS = {
+    [ROLES.ADMIN]: [PERMISSIONS.READ, PERMISSIONS.WRITE, PERMISSIONS.DELETE],
+    [ROLES.USER]: [PERMISSIONS.READ, PERMISSIONS.WRITE],
+    [ROLES.VISITOR]: [PERMISSIONS.READ]
+};
+
+class PermissionManager {
+    static hasPermission(userRole, permission) {
+        if (!userRole) return false;
+        const rolePermissions = ROLE_PERMISSIONS[userRole] || [];
+        return rolePermissions.includes(permission);
+    }
+
+    static isValidRole(role) {
+        return Object.values(ROLES).includes(role);
+    }
+}
+
+module.exports = {
+    ROLES,
+    PERMISSIONS,
+    PermissionManager
+};
+
+// ============================================
+// utils/jwt.js - SIMPLIFIED
+// ============================================
+const jwt = require('jsonwebtoken');
 
 class JWTUtils {
-    static sign(payload) {
-        try {
-            return jwt.sign(payload, JWT_SECRET, { 
-                expiresIn: JWT_EXPIRES_IN,
-                issuer: 'sudoku-app'
-            });
-        } catch (error) {
-            throw new Error('Token signing failed');
-        }
+    static generateTokens(user) {
+        const accessToken = jwt.sign(
+            {
+                id: user.id,
+                username: user.username,
+                role: user.role
+            },
+            process.env.JWT_SECRET || 'your-secret-key',
+            { expiresIn: '24h' } // Simple: 24 hours
+        );
+
+        return {
+            accessToken,
+            expiresIn: 86400 // 24 hours in seconds
+        };
     }
 
     static verify(token) {
-        try {
-            return jwt.verify(token, JWT_SECRET);
-        } catch (error) {
-            if (error.name === 'TokenExpiredError') {
-                throw new Error('Token expired');
-            } else if (error.name === 'JsonWebTokenError') {
-                throw new Error('Invalid token');
-            }
-            throw new Error('Token verification failed');
-        }
-    }
-
-    static decode(token) {
-        try {
-            return jwt.decode(token);
-        } catch (error) {
-            throw new Error('Token decode failed');
-        }
-    }
-
-    static generateTokens(user) {
-        const payload = {
-            id: user.id,
-            username: user.username,
-            role: user.role
-        };
-
-        const accessToken = this.sign(payload);
-        
-        return {
-            accessToken,
-            tokenType: 'Bearer',
-            expiresIn: JWT_EXPIRES_IN
-        };
+        return jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
     }
 }
 

@@ -1,78 +1,36 @@
-import Joi from 'joi';
+const { body, validationResult } = require('express-validator');
 
-/**
- * Validation schemas
- */
-export const schemas = {
-  // Token request validation
-  tokenRequest: Joi.object({
-    role: Joi.string().valid('ADMIN', 'USER', 'VISITOR').default('USER'),
-    permissions: Joi.array().items(Joi.string().valid('READ', 'WRITE', 'DELETE')).default(['READ'])
-  }),
+// Simple validation rules
+const validateRegister = [
+    body('username')
+        .isLength({ min: 3 })
+        .withMessage('Username must be at least 3 characters')
+        .isAlphanumeric()
+        .withMessage('Username must contain only letters and numbers'),
+    body('password')
+        .isLength({ min: 6 })
+        .withMessage('Password must be at least 6 characters')
+];
 
-  // Puzzle creation validation
-  createPuzzle: Joi.object({
-    difficulty: Joi.string().valid('easy', 'medium', 'hard').required(),
-    title: Joi.string().min(1).max(100).optional(),
-    description: Joi.string().max(500).optional()
-  }),
+const validateLogin = [
+    body('username').notEmpty().withMessage('Username is required'),
+    body('password').notEmpty().withMessage('Password is required')
+];
 
-  // Puzzle update validation
-  updatePuzzle: Joi.object({
-    difficulty: Joi.string().valid('easy', 'medium', 'hard').optional(),
-    title: Joi.string().min(1).max(100).optional(),
-    description: Joi.string().max(500).optional(),
-    puzzle: Joi.array().length(9).items(
-      Joi.array().length(9).items(Joi.number().integer().min(0).max(9))
-    ).optional(),
-    solution: Joi.array().length(9).items(
-      Joi.array().length(9).items(Joi.number().integer().min(1).max(9))
-    ).optional()
-  }),
-
-  // Puzzle validation request
-  validateMove: Joi.object({
-    row: Joi.number().integer().min(0).max(8).required(),
-    col: Joi.number().integer().min(0).max(8).required(),
-    value: Joi.number().integer().min(1).max(9).required(),
-    currentBoard: Joi.array().length(9).items(
-      Joi.array().length(9).items(Joi.number().integer().min(0).max(9))
-    ).required()
-  }),
-
-  // Pagination validation
-  pagination: Joi.object({
-    page: Joi.number().integer().min(1).default(1),
-    limit: Joi.number().integer().min(1).max(100).default(10),
-    difficulty: Joi.string().valid('easy', 'medium', 'hard').optional(),
-    sortBy: Joi.string().valid('createdAt', 'difficulty', 'title').default('createdAt'),
-    sortOrder: Joi.string().valid('asc', 'desc').default('desc')
-  })
+// Simple validation middleware
+const handleValidation = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ 
+            error: 'Validation failed',
+            details: errors.array()
+        });
+    }
+    next();
 };
 
-/**
- * Validation middleware factory
- */
-export const validate = (schema, property = 'body') => {
-  return (req, res, next) => {
-    const { error, value } = schema.validate(req[property], {
-      abortEarly: false,
-      allowUnknown: false,
-      stripUnknown: true
-    });
-
-    if (error) {
-      const errorMessage = error.details.map(detail => detail.message).join(', ');
-      return res.status(400).json({
-        success: false,
-        error: 'Validation Error',
-        message: errorMessage,
-        details: error.details
-      });
-    }
-
-    // Replace the request property with the validated value
-    req[property] = value;
-    next();
-  };
+module.exports = {
+    validateRegister,
+    validateLogin,
+    handleValidation
 };
