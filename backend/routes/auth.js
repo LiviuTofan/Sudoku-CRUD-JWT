@@ -175,48 +175,6 @@ router.post('/login', [
 
 /**
  * @swagger
- * /api/auth/me:
- *   get:
- *     summary: Get current user info
- *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: User information
- *       401:
- *         description: Unauthorized
- */
-router.get('/me', authenticateToken, async (req, res) => {
-    try {
-        const user = await User.findById(req.user.id);
-        if (!user) {
-            return res.status(404).json({ 
-                error: 'User not found',
-                code: 'USER_NOT_FOUND'
-            });
-        }
-
-        res.json({
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role,
-                createdAt: user.created_at
-            }
-        });
-
-    } catch (error) {
-        console.error('Get user error:', error);
-        res.status(500).json({ 
-            error: 'Failed to get user info',
-            code: 'GET_USER_ERROR'
-        });
-    }
-});
-
-/**
- * @swagger
  * /api/auth/token/verify:
  *   post:
  *     summary: Verify JWT token

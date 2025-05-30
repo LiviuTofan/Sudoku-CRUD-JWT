@@ -1,49 +1,107 @@
-const db = require('../database/config');
-const bcrypt = require('bcryptjs');
+const express = require('express');
+const User = require('../models/User');
+const JWTUtils = require('../utils/jwt');
+const { authenticateToken } = require('../middleware/auth');
+const { validateRegister, validateLogin, handleValidation } = require('../middleware/validation');
 
-class User {
-    static async create(userData) {
-        const { username, password, role = 'user' } = userData;
-        const hashedPassword = await bcrypt.hash(password, 10);
+const router = express.Router();
+
+// Register
+router.post('/register', validateRegister, handleValidation, async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        // Check if user exists
+        const existingUser = await User.findByUsername(username);
+        if (existingUser) {
+            return res.status(409).json({ error: 'Username already exists' });
+        }
+
+        // Create user
+        const userId = await User.create({ username, password, role: 'user' });
+        const user = await User.findById(userId);
+
+        // Generate token
+        const tokens = JWTUtils.generateTokens(user);
+
+        res.status(201).json({
+            message: 'User registered successfully',
+            user: {
+                id: user.id,
+                username: user.username,
+                role: user.role
+            },
+            ...tokens
+        });
+
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Registration failed' });
+    }
+});
+
+// Login
+router.post('/login', validateLogin, handleValidation, async (req, res) => {
+    try {
+        const { username, password } = req.body;
+
+        // Find user
+        const user = await User.findByUsername(username);
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        // Check password
+        const isValidPassword = await User.validatePassword(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        // Generate token
+        const tokens = JWTUtils.generateTokens(user);
+
+        res.json({
+            message: 'Login successful',
+            user: {
+                id: user.id,
+                username: user.username,
+                role: user.role
+            },
+            ...tokens
+        });
+
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Login failed' });
+    }
+});
+
+// Verify token
+router.post('/token/verify', (req, res) => {
+    try {
+        const { token } = req.body;
         
-        const sql = `
-            INSERT INTO users (username, password, role, created_at)
-            VALUES (?, ?, ?, datetime('now'))
-        `;
-        const result = await db.run(sql, [username, hashedPassword, role]);
-        return result.id;
-    }
+        if (!token) {
+            return res.status(400).json({ error: 'Token is required' });
+        }
 
-    static async findById(id) {
-        const sql = 'SELECT id, username, role, created_at FROM users WHERE id = ?';
-        return await db.get(sql, [id]);
-    }
+        const decoded = JWTUtils.verify(token);
+        
+        res.json({
+            valid: true,
+            decoded: {
+                id: decoded.id,
+                username: decoded.username,
+                role: decoded.role
+            }
+        });
 
-    static async findByUsername(username) {
-        const sql = 'SELECT * FROM users WHERE username = ?';
-        return await db.get(sql, [username]);
+    } catch (error) {
+        res.status(401).json({ 
+            valid: false,
+            error: 'Invalid token'
+        });
     }
+});
 
-    static async validatePassword(plainPassword, hashedPassword) {
-        return await bcrypt.compare(plainPassword, hashedPassword);
-    }
-
-    static async updateRole(id, role) {
-        const sql = 'UPDATE users SET role = ? WHERE id = ?';
-        const result = await db.run(sql, [role, id]);
-        return result.changes > 0;
-    }
-
-    static async delete(id) {
-        const sql = 'DELETE FROM users WHERE id = ?';
-        const result = await db.run(sql, [id]);
-        return result.changes > 0;
-    }
-
-    static async findAll() {
-        const sql = 'SELECT id, username, role, created_at FROM users ORDER BY created_at DESC';
-        return await db.all(sql);
-    }
-}
-
-module.exports = User;
+module.exports = router;

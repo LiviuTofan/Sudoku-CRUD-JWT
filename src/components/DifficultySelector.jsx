@@ -1,20 +1,36 @@
-import React from 'react';
-import '../styles/DifficultySelector.css';
+// src/components/DifficultySelector.jsx
+import React from 'react'
 
-const DifficultySelector = ({ difficulty, onDifficultyChange }) => {
+function DifficultySelector({ difficulty, onDifficultyChange }) {
+  const difficulties = [
+    { value: 'easy', label: 'Easy', description: 'Perfect for beginners' },
+    { value: 'medium', label: 'Medium', description: 'Moderate challenge' },
+    { value: 'hard', label: 'Hard', description: 'For experienced players' },
+    { value: 'expert', label: 'Expert', description: 'Ultimate challenge' }
+  ]
+
   return (
     <div className="difficulty-selector">
-      <select 
-        value={difficulty} 
+      <label htmlFor="difficulty-select" className="selector-label">
+        Difficulty Level:
+      </label>
+      <select
+        id="difficulty-select"
+        value={difficulty}
         onChange={(e) => onDifficultyChange(e.target.value)}
         className="difficulty-select"
       >
-        <option value="easy">Easy</option>
-        <option value="medium">Medium</option>
-        <option value="hard">Hard</option>
+        {difficulties.map((diff) => (
+          <option key={diff.value} value={diff.value}>
+            {diff.label}
+          </option>
+        ))}
       </select>
+      <span className="difficulty-description">
+        {difficulties.find(d => d.value === difficulty)?.description}
+      </span>
     </div>
-  );
-};
+  )
+}
 
-export default DifficultySelector;
+export default DifficultySelector
