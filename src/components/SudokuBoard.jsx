@@ -1,202 +1,188 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import '../styles/SudokuBoard.css';
+// src/components/SudokuBoard.jsx
+import React, { useState, useEffect, useCallback } from 'react'
 
-const SudokuBoard = ({ puzzle, solution }) => {
-  const [board, setBoard] = useState(Array(9).fill().map(() => Array(9).fill(0)));
-  const [selectedCell, setSelectedCell] = useState(null);
-  const [errors, setErrors] = useState(Array(9).fill().map(() => Array(9).fill(false)));
-  const [showingSolution, setShowingSolution] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [puzzleSolved, setPuzzleSolved] = useState(false);
-  
+function SudokuBoard({ puzzle, solution, onPuzzleChange }) {
+  const [board, setBoard] = useState([])
+  const [originalPuzzle, setOriginalPuzzle] = useState([])
+  const [selectedCell, setSelectedCell] = useState(null)
+  const [errors, setErrors] = useState({})
+  const [isComplete, setIsComplete] = useState(false)
+
+  // Initialize board when puzzle changes
   useEffect(() => {
     if (puzzle) {
-      setBoard(puzzle.map(row => [...row]));
-      setErrors(Array(9).fill().map(() => Array(9).fill(false)));
-      setPuzzleSolved(false);
-      setShowConfetti(false);
+      const puzzleBoard = puzzle.map(row => [...row])
+      setBoard(puzzleBoard)
+      setOriginalPuzzle(puzzle.map(row => [...row]))
+      setErrors({})
+      setIsComplete(false)
     }
-  }, [puzzle]);
+  }, [puzzle])
 
-  const isPrefilled = (row, col) => {
-    return puzzle && puzzle[row][col] !== 0;
-  };
-
-  const toggleSolution = () => {
-    setShowingSolution(!showingSolution);
-    if (!showingSolution) {
-      if (solution) {
-        setBoard(solution.map(row => [...row]));
-      }
-    } else {
-      if (puzzle) {
-        setBoard(puzzle.map(row => [...row]));
-        setErrors(Array(9).fill().map(() => Array(9).fill(false)));
-      }
-    }
-  };
-
-  const handleCellClick = (row, col) => {
-    if (showingSolution) return;
-    if (!isPrefilled(row, col)) {
-      setSelectedCell({ row, col });
-    }
-  };
-
-
-  const countRemainingSteps = useCallback(() => {
-    let count = 0;
-    for (let i = 0; i < 9; i++) {
-      for (let j = 0; j < 9; j++) {
-        // Count if cell is empty OR has an error
-        if (board[i][j] === 0 || errors[i][j]) {
-          count++;
+  // Check if puzzle is complete
+  const checkCompletion = useCallback((currentBoard) => {
+    if (!solution) return false
+    
+    for (let row = 0; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (currentBoard[row][col] !== solution[row][col]) {
+          return false
         }
       }
     }
-    return count;
-  }, [board, errors]);
+    return true
+  }, [solution])
 
-  // Check if puzzle is solved after each move
-  useEffect(() => {
-    const remainingSteps = countRemainingSteps();
-    if (remainingSteps === 0 && !showingSolution && !puzzleSolved) {
-      setPuzzleSolved(true);
-      setShowConfetti(true);
-      // Hide confetti after 5 seconds
-      setTimeout(() => {
-        setShowConfetti(false);
-      }, 5000);
-    }
-  }, [board, errors, countRemainingSteps, showingSolution, puzzleSolved]);
-
-  const handleNumberInput = (number) => {
-    if (selectedCell) {
-      const { row, col } = selectedCell;
-      const newBoard = [...board];
-      newBoard[row][col] = number;
-      setBoard(newBoard);
-      
-      // Check if the move is valid according to the solution
-      const newErrors = [...errors];
-      newErrors[row][col] = number !== 0 && number !== solution[row][col];
-      setErrors(newErrors);
-    }
-  };
-
-  // Handle keyboard input
-  const handleKeyDown = (e) => {
-    if (selectedCell && !showingSolution) {
-      const key = e.key;
-      if (/^[1-9]$/.test(key)) {
-        handleNumberInput(parseInt(key));
-      } else if (key === 'Backspace' || key === 'Delete' || key === '0') {
-        handleNumberInput(0);
+  // Validate a number placement
+  const isValidPlacement = (board, row, col, num) => {
+    // Check row
+    for (let x = 0; x < 9; x++) {
+      if (x !== col && board[row][x] === num) {
+        return false
       }
     }
-  };
 
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [selectedCell, board]);
+    // Check column
+    for (let x = 0; x < 9; x++) {
+      if (x !== row && board[x][col] === num) {
+        return false
+      }
+    }
 
-  const handleClear = () => {
-    handleNumberInput(0);
-  };
+    // Check 3x3 box
+    const boxRow = Math.floor(row / 3) * 3
+    const boxCol = Math.floor(col / 3) * 3
+    
+    for (let i = boxRow; i < boxRow + 3; i++) {
+      for (let j = boxCol; j < boxCol + 3; j++) {
+        if ((i !== row || j !== col) && board[i][j] === num) {
+          return false
+        }
+      }
+    }
 
-  const renderNumberControls = () => {
-    return (
-      <div className="number-controls">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
-          <button 
-            key={num} 
-            onClick={() => handleNumberInput(num)}
-            className="number-button"
-          >
-            {num}
-          </button>
-        ))}
-        <button 
-          onClick={handleClear}
-          className="number-button backspace-button"
-        >
-          ←
-        </button>
-      </div>
-    );
-  };
+    return true
+  }
 
-  // Render confetti
-  const renderConfetti = () => {
-    return (
-      <div className={`confetti-container ${showConfetti ? 'active' : ''}`}>
-        {Array.from({ length: 150 }).map((_, i) => (
-          <div 
-            key={i} 
-            className="confetti"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`,
-              backgroundColor: ['#ffd700', '#ff0000', '#00ff00', '#0000ff', '#ff00ff'][Math.floor(Math.random() * 5)]
-            }}
-          />
-        ))}
-        <div className="celebration-message">
-          <h2>Congratulations!</h2>
-          <p>You solved the puzzle!</p>
-        </div>
-      </div>
-    );
-  };
+  // Handle cell value change
+  const handleCellChange = (row, col, value) => {
+    // Don't allow changes to original puzzle cells
+    if (originalPuzzle[row][col] !== 0) return
+
+    const newBoard = board.map(r => [...r])
+    const numValue = value === '' ? 0 : parseInt(value)
+
+    // Validate input
+    if (value !== '' && (isNaN(numValue) || numValue < 1 || numValue > 9)) {
+      return
+    }
+
+    newBoard[row][col] = numValue
+
+    // Check for errors
+    const newErrors = { ...errors }
+    const errorKey = `${row}-${col}`
+
+    if (numValue !== 0 && !isValidPlacement(newBoard, row, col, numValue)) {
+      newErrors[errorKey] = true
+    } else {
+      delete newErrors[errorKey]
+    }
+
+    setBoard(newBoard)
+    setErrors(newErrors)
+
+    // Check if puzzle is complete
+    const complete = checkCompletion(newBoard)
+    setIsComplete(complete)
+
+    // Notify parent component of change
+    if (onPuzzleChange) {
+      onPuzzleChange(newBoard)
+    }
+  }
+
+  // Handle cell selection
+  const handleCellClick = (row, col) => {
+    setSelectedCell({ row, col })
+  }
+
+  // Handle keyboard input
+  const handleKeyDown = (e, row, col) => {
+    if (originalPuzzle[row][col] !== 0) return
+
+    const key = e.key
+    if (key >= '1' && key <= '9') {
+      handleCellChange(row, col, key)
+    } else if (key === 'Backspace' || key === 'Delete') {
+      handleCellChange(row, col, '')
+    }
+  }
+
+  // Get cell class names
+  const getCellClassName = (row, col) => {
+    let className = 'sudoku-cell'
+    
+    if (originalPuzzle[row][col] !== 0) {
+      className += ' original'
+    }
+    
+    if (selectedCell && selectedCell.row === row && selectedCell.col === col) {
+      className += ' selected'
+    }
+    
+    if (errors[`${row}-${col}`]) {
+      className += ' error'
+    }
+    
+    // Add border classes for 3x3 box separation
+    if (row % 3 === 0) className += ' border-top'
+    if (col % 3 === 0) className += ' border-left'
+    if (row % 3 === 2) className += ' border-bottom'
+    if (col % 3 === 2) className += ' border-right'
+    
+    return className
+  }
+
+  if (!board.length) {
+    return <div className="sudoku-loading">Loading puzzle...</div>
+  }
 
   return (
     <div className="sudoku-container">
-      {showConfetti && renderConfetti()}
+      {isComplete && (
+        <div className="completion-message">
+          🎉 Congratulations! You solved the puzzle! 🎉
+        </div>
+      )}
       
-      <div className="sudoku-board">
+      <div className="sudoku-grid">
         {board.map((row, rowIndex) => (
-          <div key={rowIndex} className="board-row">
+          <div key={rowIndex} className="sudoku-row">
             {row.map((cell, colIndex) => (
-              <div 
-                key={colIndex} 
-                className={`board-cell 
-                  ${isPrefilled(rowIndex, colIndex) ? 'prefilled' : ''}
-                  ${selectedCell && selectedCell.row === rowIndex && selectedCell.col === colIndex ? 'selected' : ''}
-                  ${errors[rowIndex][colIndex] ? 'error' : ''}
-                  ${rowIndex % 3 === 2 && rowIndex < 8 ? 'border-bottom' : ''}
-                  ${colIndex % 3 === 2 && colIndex < 8 ? 'border-right' : ''}
-                  ${showingSolution ? 'solution-view' : ''}
-                `}
+              <input
+                key={`${rowIndex}-${colIndex}`}
+                type="text"
+                className={getCellClassName(rowIndex, colIndex)}
+                value={cell === 0 ? '' : cell}
+                onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
                 onClick={() => handleCellClick(rowIndex, colIndex)}
-              >
-                {cell !== 0 ? cell : ''}
-              </div>
+                onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                maxLength="1"
+                readOnly={originalPuzzle[rowIndex][colIndex] !== 0}
+              />
             ))}
           </div>
         ))}
       </div>
       
-      <div className="board-controls">
-        {!showingSolution && renderNumberControls()}
-        
-        {!showingSolution && (
-          <div className="steps-counter">
-            Steps to solve: {countRemainingSteps()}
-          </div>
-        )}
-        
-        <button 
-          className={`solution-button ${showingSolution ? 'showing-solution' : ''}`}
-          onClick={toggleSolution}
-        >
-          {showingSolution ? 'Hide Solution' : 'Show Solution'}
-        </button>
-      </div>
+      {Object.keys(errors).length > 0 && (
+        <div className="error-info">
+          ⚠️ Some numbers conflict with Sudoku rules
+        </div>
+      )}
     </div>
-  );
-};
+  )
+}
 
-export default SudokuBoard;
+export default SudokuBoard

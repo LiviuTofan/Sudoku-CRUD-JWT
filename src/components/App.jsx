@@ -1,3 +1,4 @@
+// App.jsx
 import React, { useState, useEffect } from 'react'
 import SudokuBoard from './SudokuBoard'
 import DifficultySelector from './DifficultySelector'
@@ -43,8 +44,24 @@ function App() {
           }
         } catch (error) {
           console.error('Auth check failed:', error)
-          // Token might be expired, clear it
-          apiService.logout()
+          // Token might be expired, try to refresh
+          try {
+            await apiService.refreshToken()
+            const verifyResponse = await apiService.verifyToken()
+            if (verifyResponse.valid) {
+              setUser({
+                id: verifyResponse.decoded.id,
+                username: verifyResponse.decoded.username,
+                role: verifyResponse.decoded.role
+              })
+              await loadUserPuzzles()
+            } else {
+              apiService.logout()
+            }
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError)
+            apiService.logout()
+          }
         }
       }
       setLoading(false)
@@ -53,27 +70,32 @@ function App() {
     checkAuth()
   }, [])
 
-  // Load user's puzzles (you might want to get the most recent one)
+  // Load user's puzzles (get the most recent one)
   const loadUserPuzzles = async () => {
     try {
       const puzzlesResponse = await apiService.getPuzzles(1, 1) // Get most recent puzzle
       if (puzzlesResponse.puzzles && puzzlesResponse.puzzles.length > 0) {
         const recentPuzzle = puzzlesResponse.puzzles[0]
-        setPuzzle(recentPuzzle.puzzle_data.puzzle)
-        setSolution(recentPuzzle.puzzle_data.solution)
+        setPuzzle(recentPuzzle.puzzle)
+        setSolution(recentPuzzle.solution)
         setCurrentPuzzleId(recentPuzzle.id)
         setDifficulty(recentPuzzle.difficulty)
+      } else {
+        // No existing puzzles, generate a new one
+        await generateNewPuzzle()
       }
     } catch (error) {
       console.error('Failed to load user puzzles:', error)
-      // If no puzzles exist, generate a new one
-      generateNewPuzzle()
+      // If no puzzles exist or error occurred, generate a new one
+      await generateNewPuzzle()
     }
   }
 
   // Handle successful authentication
   const handleAuthSuccess = (authData) => {
     setUser(authData.user)
+    setError('')
+    // Load puzzles after successful authentication
     loadUserPuzzles()
   }
 
@@ -95,13 +117,16 @@ function App() {
     setError('')
     
     try {
-      const response = await apiService.generatePuzzle(difficulty)
+      const response = await apiService.generatePuzzle(difficulty, true) // save=true
       
       // The response should contain the puzzle data
-      if (response.puzzle_data) {
-        setPuzzle(response.puzzle_data.puzzle)
-        setSolution(response.puzzle_data.solution)
-        setCurrentPuzzleId(response.id)
+      if (response.puzzle) {
+        setPuzzle(response.puzzle.puzzle)
+        setSolution(response.puzzle.solution)
+        // If puzzle was saved, use the saved puzzle ID
+        if (response.savedPuzzle) {
+          setCurrentPuzzleId(response.savedPuzzle.id)
+        }
       } else {
         throw new Error('Invalid puzzle data received')
       }
@@ -119,14 +144,13 @@ function App() {
     
     try {
       await apiService.updatePuzzle(currentPuzzleId, {
-        puzzle_data: {
-          puzzle: newPuzzleState,
-          solution: solution
-        }
+        puzzle: newPuzzleState,
+        solution: solution
       })
     } catch (error) {
       console.error('Failed to save puzzle state:', error)
       // Don't show error to user for save failures, as it's not critical
+      // but we could show a subtle indicator that changes weren't saved
     }
   }
 
@@ -156,7 +180,10 @@ function App() {
   if (loading) {
     return (
       <div className="app-container loading">
-        <div className="loading-spinner">Loading...</div>
+        <div className="loading-spinner">
+          <div className="spinner"></div>
+          <p>Loading...</p>
+        </div>
       </div>
     )
   }
@@ -195,11 +222,16 @@ function App() {
     >
       <div className="background-overlay"></div>
       
-      <header>
+      <header className="app-header">
         <div className="header-left">
           <h1>Sudoku</h1>
           {user && (
-            <span className="user-welcome">Welcome, {user.username}!</span>
+            <span className="user-welcome">
+              Welcome, <strong>{user.username}</strong>!
+              {user.role === 'admin' && (
+                <span className="admin-badge">Admin</span>
+              )}
+            </span>
           )}
         </div>
         <div className="header-right">
@@ -207,6 +239,7 @@ function App() {
             className="theme-toggle" 
             onClick={toggleTheme}
             aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           >
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
@@ -214,40 +247,56 @@ function App() {
             className="logout-btn" 
             onClick={handleLogout}
             aria-label="Logout"
+            title="Logout"
           >
             Logout
           </button>
         </div>
       </header>
 
-      <main>
+      <main className="app-main">
         {error && (
           <div className="error-banner">
-            {error}
-            <button onClick={() => setError('')} className="error-close">×</button>
+            <span>{error}</span>
+            <button onClick={() => setError('')} className="error-close" aria-label="Close error">×</button>
           </div>
         )}
 
-        <div className="controls">
+        <div className="game-controls">
           <DifficultySelector 
             difficulty={difficulty} 
             onDifficultyChange={handleDifficultyChange} 
+            disabled={generatingPuzzle}
           />
           <button 
             className="new-game-btn" 
             onClick={generateNewPuzzle}
             disabled={generatingPuzzle}
           >
-            {generatingPuzzle ? 'Generating...' : 'New Game'}
+            {generatingPuzzle ? (
+              <span className="button-loading">
+                <span className="spinner small"></span>
+                Generating...
+              </span>
+            ) : (
+              'New Game'
+            )}
           </button>
         </div>
 
-        {puzzle && (
+        {puzzle && solution && (
           <SudokuBoard 
             puzzle={puzzle} 
             solution={solution}
             onPuzzleChange={updatePuzzleState}
+            disabled={generatingPuzzle}
           />
+        )}
+
+        {!puzzle && !generatingPuzzle && (
+          <div className="no-puzzle">
+            <p>No puzzle loaded. Click "New Game" to start!</p>
+          </div>
         )}
       </main>
     </div>
