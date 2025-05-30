@@ -8,7 +8,7 @@ const router = express.Router();
 
 /**
  * @swagger
- * /auth/register:
+ * /api/auth/register:
  *   post:
  *     summary: Register a new user
  *     tags: [Authentication]
@@ -94,7 +94,7 @@ router.post('/register', [
 
 /**
  * @swagger
- * /auth/login:
+ * /api/auth/login:
  *   post:
  *     summary: Login user
  *     tags: [Authentication]
@@ -175,7 +175,7 @@ router.post('/login', [
 
 /**
  * @swagger
- * /auth/me:
+ * /api/auth/me:
  *   get:
  *     summary: Get current user info
  *     tags: [Authentication]
@@ -217,7 +217,7 @@ router.get('/me', authenticateToken, async (req, res) => {
 
 /**
  * @swagger
- * /auth/token/verify:
+ * /api/auth/token/verify:
  *   post:
  *     summary: Verify JWT token
  *     tags: [Authentication]
