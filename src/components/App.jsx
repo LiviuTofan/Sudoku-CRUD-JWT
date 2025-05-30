@@ -1,4 +1,4 @@
-// App.jsx - Improved Version with Better Generation Flow
+// App.jsx - Fixed Version with Persistent Yellow Hint Highlighting
 import React, { useState, useEffect } from 'react'
 import SudokuBoard from './SudokuBoard'
 import DifficultySelector from './DifficultySelector'
@@ -16,6 +16,10 @@ function App() {
   const [currentPuzzleId, setCurrentPuzzleId] = useState(null)
   const [userProgress, setUserProgress] = useState(null)
   const [originalPuzzle, setOriginalPuzzle] = useState(null)
+  
+  // FIXED: Add hint cells tracking (removed auto-removal timer)
+  const [hintCells, setHintCells] = useState(new Set())
+  
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem('sudokuTheme')
     return savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -105,7 +109,6 @@ function App() {
     }
   }
 
-  // IMPROVEMENT: Centralized puzzle loading function
   const loadPuzzleData = async (puzzleData) => {
     console.log('📥 Loading puzzle data:', puzzleData.id)
     
@@ -116,6 +119,9 @@ function App() {
     setSolution(puzzleData.solution)
     setCurrentPuzzleId(puzzleData.id)
     setDifficulty(puzzleData.difficulty)
+    
+    // FIXED: Reset hint cells when loading new puzzle (this is correct)
+    setHintCells(new Set())
     
     // Reset game stats
     setGameStats({
@@ -149,6 +155,7 @@ function App() {
     setCurrentPuzzleId(null)
     setUserProgress(null)
     setOriginalPuzzle(null)
+    setHintCells(new Set()) // FIXED: Reset hint cells on logout
     setGameStats({
       isComplete: false,
       correctCells: 0,
@@ -158,7 +165,6 @@ function App() {
     setError('')
   }
 
-  // IMPROVEMENT: Better puzzle generation with proper error handling
   const generateNewPuzzle = async () => {
     if (!user) {
       console.log('❌ Cannot generate puzzle: no user')
@@ -173,7 +179,6 @@ function App() {
       const response = await apiService.generatePuzzle(difficulty, true)
       console.log('🧩 Generate puzzle response:', response)
       
-      // IMPROVEMENT: Better response handling
       if (!response.puzzle) {
         throw new Error('No puzzle data in response')
       }
@@ -192,10 +197,7 @@ function App() {
         puzzleData.puzzle = response.puzzle
       }
       
-      // Try to get solution from response
       puzzleData.solution = response.solution || response.puzzle.solution
-      
-      // Try to get puzzle ID from various possible locations
       puzzleData.id = response.savedPuzzle?.id || 
                      response.puzzleId || 
                      response.id || 
@@ -211,7 +213,6 @@ function App() {
         throw new Error('Invalid puzzle data received')
       }
       
-      // IMPROVEMENT: If no ID in response, wait briefly and reload to get it
       if (!puzzleData.id) {
         console.log('⏳ No puzzle ID in response, reloading puzzles...')
         setTimeout(async () => {
@@ -231,10 +232,9 @@ function App() {
             setGeneratingPuzzle(false)
           }
         }, 500)
-        return // Exit early, let the timeout handle the rest
+        return
       }
       
-      // If we have an ID, load the puzzle data directly
       await loadPuzzleData(puzzleData)
       
     } catch (error) {
@@ -245,7 +245,6 @@ function App() {
     }
   }
 
-  // IMPROVEMENT: Better validation with detailed logging
   const validatePuzzleState = async (puzzleId, puzzleState) => {
     try {
       console.log('🔍 Validating puzzle state with ID:', puzzleId)
@@ -341,42 +340,183 @@ function App() {
     }
   }
 
+  // FIXED: Hint function with persistent yellow highlighting
   const getHint = async () => {
     if (!currentPuzzleId || !userProgress) {
       console.log('❌ Cannot get hint: missing puzzle ID or progress')
+      setError('Cannot get hint: puzzle not loaded properly')
       return
     }
     
     console.log('💡 Getting hint...')
+    setError('')
     
     try {
-      const hintResponse = await apiService.solvePuzzle(currentPuzzleId, {
-        currentState: userProgress,
-        hint: true
+      if (!Array.isArray(userProgress) || userProgress.length !== 9) {
+        console.error('❌ userProgress is not a valid 9x9 array:', userProgress)
+        setError('Invalid puzzle state. Please refresh the page.')
+        return
+      }
+
+      const cleanGrid = []
+      
+      for (let i = 0; i < 9; i++) {
+        const row = userProgress[i]
+        if (!Array.isArray(row) || row.length !== 9) {
+          console.error(`❌ Row ${i} is invalid:`, row)
+          setError('Invalid puzzle state. Please refresh the page.')
+          return
+        }
+        
+        const cleanRow = []
+        for (let j = 0; j < 9; j++) {
+          let cellValue = row[j]
+          
+          if (cellValue === null || cellValue === undefined || cellValue === '') {
+            cellValue = 0
+          } else if (typeof cellValue === 'string') {
+            cellValue = parseInt(cellValue, 10)
+            if (isNaN(cellValue)) cellValue = 0
+          } else if (typeof cellValue === 'number') {
+            cellValue = Math.floor(cellValue)
+          } else {
+            console.warn(`Unexpected cell type at [${i}][${j}]:`, typeof cellValue, cellValue)
+            cellValue = 0
+          }
+          
+          if (cellValue < 0 || cellValue > 9) {
+            console.warn(`Invalid cell value at [${i}][${j}]:`, cellValue, '-> using 0')
+            cellValue = 0
+          }
+          
+          cleanRow.push(cellValue)
+        }
+        cleanGrid.push(cleanRow)
+      }
+      
+      const isValidGrid = cleanGrid.length === 9 && 
+                        cleanGrid.every(row => 
+                          Array.isArray(row) && row.length === 9 && 
+                          row.every(cell => Number.isInteger(cell) && cell >= 0 && cell <= 9)
+                        )
+      
+      if (!isValidGrid) {
+        console.error('❌ Clean grid is still invalid:', cleanGrid)
+        setError('Unable to format puzzle state properly. Please refresh the page.')
+        return
+      }
+      
+      console.log('💡 Sending hint request with clean state:', {
+        puzzleId: currentPuzzleId,
+        gridValid: isValidGrid,
+        dimensions: `${cleanGrid.length}x${cleanGrid[0].length}`,
+        sampleRow: cleanGrid[0],
+        allIntegers: cleanGrid.flat().every(cell => Number.isInteger(cell))
       })
       
-      console.log('💡 Hint response:', hintResponse)
+      const requestPayload = {
+        currentState: cleanGrid,
+        hint: true
+      }
       
-      if (hintResponse.hint) {
+      // Test JSON serialization
+      try {
+        const testSerialization = JSON.stringify(requestPayload)
+        const testDeserialization = JSON.parse(testSerialization)
+        console.log('💡 Serialization test passed:', {
+          originalLength: requestPayload.currentState.length,
+          serializedLength: testDeserialization.currentState.length,
+          firstCellsMatch: requestPayload.currentState[0][0] === testDeserialization.currentState[0][0]
+        })
+      } catch (serError) {
+        console.error('❌ Serialization test failed:', serError)
+        setError('Unable to prepare request data. Please refresh the page.')
+        return
+      }
+      
+      const hintResponse = await apiService.solvePuzzle(currentPuzzleId, requestPayload)
+      
+      console.log('💡 Hint response received:', hintResponse)
+      
+      if (hintResponse && hintResponse.hint) {
         const { row, col, value } = hintResponse.hint
         
-        const newProgress = userProgress.map(r => [...r])
+        console.log(`💡 Applying hint: [${row}, ${col}] = ${value}`)
+        
+        // Validate hint values
+        if (
+          !Number.isInteger(row) || row < 0 || row > 8 ||
+          !Number.isInteger(col) || col < 0 || col > 8 ||
+          !Number.isInteger(value) || value < 1 || value > 9
+        ) {
+          console.error('❌ Invalid hint values:', { row, col, value })
+          setError('Received invalid hint from server')
+          return
+        }
+        
+        // FIXED: Add hint cell to tracking set (without auto-removal timer)
+        const hintKey = `${row}-${col}`
+        setHintCells(prev => new Set([...prev, hintKey]))
+        
+        // REMOVED: Auto-removal timer - hints now persist!
+        
+        const newProgress = cleanGrid.map(r => [...r])
         newProgress[row][col] = value
         
         setUserProgress(newProgress)
         setPuzzle(newProgress)
         
+        // Update validation and save state
         await validatePuzzleState(currentPuzzleId, newProgress)
         await updatePuzzleState(newProgress)
         
-        console.log(`💡 Hint applied: [${row}, ${col}] = ${value}`)
+        console.log(`💡 Hint applied successfully: [${row}, ${col}] = ${value}`)
+        setError('')
+        
+      } else if (hintResponse && hintResponse.message) {
+        console.log('💡 Server message:', hintResponse.message)
+        setError(hintResponse.message)
       } else {
-        console.log('💡 No hints available')
+        console.log('💡 No hints available in response')
         setError('No hints available for this puzzle')
       }
+      
     } catch (error) {
       console.error('❌ Failed to get hint:', error)
-      setError('Failed to get hint. Please try again.')
+      
+      let errorMessage = 'Failed to get hint. '
+      
+      try {
+        if (error.message.includes('Validation failed')) {
+          errorMessage += 'The puzzle data format was rejected. '
+          
+          console.error('❌ Validation failed. Debug info:', {
+            userProgressType: typeof userProgress,
+            userProgressSample: userProgress?.[0]?.slice(0, 3),
+            puzzleId: currentPuzzleId,
+            errorDetails: error.message
+          })
+          
+          errorMessage += 'Please refresh the page and try again.'
+        } else if (error.message.includes('Invalid puzzle ID')) {
+          errorMessage += 'Puzzle ID is invalid. Please try loading a new puzzle.'
+        } else if (error.message.includes('Unauthorized')) {
+          errorMessage += 'Please log in again.'
+          handleLogout()
+          return
+        } else if (error.message.includes('not found')) {
+          errorMessage += 'Puzzle not found on server. Try generating a new puzzle.'
+        } else if (error.message.includes('Server error')) {
+          errorMessage += 'Server is experiencing issues. Please try again in a moment.'
+        } else {
+          errorMessage += 'Please try again or refresh the page.'
+        }
+      } catch (parseError) {
+        console.error('Error parsing error:', parseError)
+        errorMessage += 'Please try again or refresh the page.'
+      }
+      
+      setError(errorMessage)
     }
   }
 
@@ -389,8 +529,23 @@ function App() {
     console.log('🔍 Solving puzzle...')
     
     try {
+      const sanitizedState = userProgress.map((row, rowIndex) => {
+        if (!Array.isArray(row) || row.length !== 9) {
+          console.error(`❌ Invalid row ${rowIndex} in userProgress:`, row)
+          return new Array(9).fill(0)
+        }
+        return row.map((cell, colIndex) => {
+          const numCell = parseInt(cell, 10)
+          if (isNaN(numCell) || numCell < 0 || numCell > 9) {
+            console.error(`❌ Invalid cell [${rowIndex}][${colIndex}]:`, cell)
+            return 0
+          }
+          return numCell
+        })
+      })
+      
       const solutionResponse = await apiService.solvePuzzle(currentPuzzleId, {
-        currentState: userProgress,
+        currentState: sanitizedState,
         hint: false
       })
       
@@ -399,6 +554,9 @@ function App() {
       if (solutionResponse.solution) {
         setUserProgress(solutionResponse.solution)
         setPuzzle(solutionResponse.solution)
+        
+        // FIXED: Clear hint highlighting when puzzle is solved (this is correct)
+        setHintCells(new Set())
         
         setGameStats({
           isComplete: true,
@@ -422,6 +580,7 @@ function App() {
     if (originalPuzzle) {
       setUserProgress(originalPuzzle)
       setPuzzle(originalPuzzle)
+      setHintCells(new Set()) // FIXED: Clear hint highlighting on reset (this is correct)
       setGameStats({
         isComplete: false,
         correctCells: 0,
@@ -438,7 +597,6 @@ function App() {
   const handleDifficultyChange = (newDifficulty) => {
     console.log('🎚️ Difficulty changed to:', newDifficulty)
     setDifficulty(newDifficulty)
-    // Note: User must click "New Game" to generate puzzle with new difficulty
   }
 
   useEffect(() => {
@@ -556,7 +714,7 @@ function App() {
           </button>
         </div>
 
-        {/* Improved Debug Info */}
+        {/* Enhanced Debug Info */}
         <div style={{ 
           background: 'rgba(0,0,0,0.1)', 
           padding: '10px', 
@@ -573,6 +731,10 @@ function App() {
           <div>🔄 Status: {generatingPuzzle ? 'Generating...' : 'Ready'}</div>
           <div>✅ Complete: {gameStats.isComplete ? 'Yes' : 'No'}</div>
           <div>📈 Progress: {gameStats.progress}% ({gameStats.correctCells}/81)</div>
+          <div>💡 Hint Cells: {hintCells.size} active (persistent)</div>
+          <div>🐛 UserProgress Valid: {userProgress ? 
+            `${Array.isArray(userProgress) ? userProgress.length : 'Not Array'}x${Array.isArray(userProgress?.[0]) ? userProgress[0].length : 'Invalid'}` 
+            : 'None'}</div>
         </div>
 
         {gameStats && puzzle && (
@@ -595,8 +757,12 @@ function App() {
             <button 
               className="hint-btn" 
               onClick={getHint}
-              disabled={generatingPuzzle || !solution}
-              title={!solution ? "Solution not available for hints" : "Get a hint"}
+              disabled={generatingPuzzle || !solution || !currentPuzzleId}
+              title={
+                !solution ? "Solution not available for hints" : 
+                !currentPuzzleId ? "Puzzle ID missing" :
+                "Get a hint (will stay highlighted until new game/reset)"
+              }
             >
               💡 Hint
             </button>
@@ -626,6 +792,7 @@ function App() {
             disabled={generatingPuzzle}
             violations={gameStats.violations}
             isComplete={gameStats.isComplete}
+            hintCells={hintCells} // FIXED: Pass persistent hint cells to board
           />
         )}
 

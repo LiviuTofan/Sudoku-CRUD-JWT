@@ -206,3 +206,32 @@ header h1 {
 .solution-button.showing-solution:hover {
   background-color: #c82333;
 }
+
+/* Add this to your CSS file for the hint pulse animation */
+
+@keyframes hint-pulse {
+  0% {
+    background-color: #ffeb3b;
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(255, 235, 59, 0.7);
+  }
+  50% {
+    background-color: #ffc107;
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.9);
+  }
+  100% {
+    background-color: #ffeb3b;
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(255, 235, 59, 0.7);
+  }
+}
+
+/* Alternative: If you want to use CSS classes instead of inline styles */
+.hint-cell-alternative {
+  background-color: #ffeb3b !important;
+  color: #333 !important;
+  font-weight: bold !important;
+  animation: hint-pulse 0.5s ease-in-out;
+  box-shadow: 0 0 10px rgba(255, 235, 59, 0.7) !important;
+}

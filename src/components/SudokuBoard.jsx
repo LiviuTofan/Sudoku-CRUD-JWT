@@ -7,7 +7,8 @@ const SudokuBoard = ({
   onCellChange, 
   disabled, 
   violations = [], 
-  isComplete 
+  isComplete,
+  hintCells = new Set()
 }) => {
   const [board, setBoard] = useState(Array(9).fill().map(() => Array(9).fill(0)));
   const [selectedCell, setSelectedCell] = useState(null);
@@ -36,6 +37,17 @@ const SudokuBoard = ({
 
   const isPrefilled = (row, col) => {
     return originalPuzzle && originalPuzzle[row][col] !== 0;
+  };
+
+  const isHintCell = (row, col) => {
+    const hintKey = `${row}-${col}`;
+    return hintCells.has(hintKey);
+  };
+
+  const isCorrectUserEntry = (row, col) => {
+    if (isPrefilled(row, col)) return false;
+    if (!solution || !board[row] || board[row][col] === 0) return false;
+    return board[row][col] === solution[row][col];
   };
 
   const handleCellClick = (row, col) => {
@@ -107,22 +119,46 @@ const SudokuBoard = ({
                 const isSelected = selectedCell && selectedCell.row === rowIndex && selectedCell.col === colIndex;
                 const isPrefilledCell = isPrefilled(rowIndex, colIndex);
                 const hasError = errors[rowIndex][colIndex];
+                const isHint = isHintCell(rowIndex, colIndex);
+                const isCorrect = isCorrectUserEntry(rowIndex, colIndex);
                 const isThickBottomBorder = rowIndex % 3 === 2 && rowIndex < 8;
                 const isThickRightBorder = colIndex % 3 === 2 && colIndex < 8;
+                
+                // Build base cell style
+                let cellStyle = { ...styles.cell };
+                
+                if (isThickBottomBorder) cellStyle = { ...cellStyle, ...styles.thickBottomBorder };
+                if (isThickRightBorder) cellStyle = { ...cellStyle, ...styles.thickRightBorder };
+                if (disabled || isComplete) cellStyle = { ...cellStyle, ...styles.disabledCell };
+                
+                cellStyle.cursor = (!isPrefilledCell && !disabled && !isComplete) ? 'pointer' : 'default';
+                
+                // Build CSS classes for better style control
+                let cssClasses = 'sudoku-cell';
+                
+                if (isSelected) {
+                  cssClasses += ' selected-cell';
+                }
+                
+                // Cell type classes (mutually exclusive)
+                if (isPrefilledCell) {
+                  cssClasses += ' prefilled-cell';
+                } else if (cell !== 0) {
+                  // User-entered number
+                  if (isHint) {
+                    cssClasses += ' hint-number-cell';
+                  } else if (hasError || !isCorrect) {
+                    cssClasses += ' wrong-number-cell';
+                  } else if (isCorrect) {
+                    cssClasses += ' correct-number-cell';
+                  }
+                }
                 
                 return (
                   <div 
                     key={colIndex} 
-                    style={{
-                      ...styles.cell,
-                      ...(isSelected ? styles.selectedCell : {}),
-                      ...(isPrefilledCell ? styles.prefilledCell : {}),
-                      ...(hasError ? styles.errorCell : {}),
-                      ...(isThickBottomBorder ? styles.thickBottomBorder : {}),
-                      ...(isThickRightBorder ? styles.thickRightBorder : {}),
-                      ...(disabled || isComplete ? styles.disabledCell : {}),
-                      cursor: (!isPrefilledCell && !disabled && !isComplete) ? 'pointer' : 'default'
-                    }}
+                    className={cssClasses}
+                    style={cellStyle}
                     onClick={() => handleCellClick(rowIndex, colIndex)}
                   >
                     {cell !== 0 ? cell : ''}
@@ -136,6 +172,13 @@ const SudokuBoard = ({
       
       {renderNumberControls()}
       
+      {/* Debug info for active hints */}
+      {hintCells.size > 0 && (
+        <div style={styles.hintDebug}>
+          💡 Active hints: {Array.from(hintCells).join(', ')}
+        </div>
+      )}
+      
       {isComplete && (
         <div style={styles.completionMessage}>
           🎉 Congratulations! Puzzle completed! 🎉
@@ -144,6 +187,60 @@ const SudokuBoard = ({
     </div>
   );
 };
+
+// Inject CSS styles for different cell types
+if (typeof document !== 'undefined' && !document.getElementById('sudoku-cell-styles')) {
+  const style = document.createElement('style');
+  style.id = 'sudoku-cell-styles';
+  style.textContent = `
+    .sudoku-cell {
+      background-color: #fff;
+      transition: all 0.2s ease;
+    }
+    
+    .sudoku-cell.selected-cell {
+      background-color: #e3f2fd !important;
+      border: 2px solid #2196F3 !important;
+      box-shadow: 0 0 8px rgba(33, 150, 243, 0.4) !important;
+    }
+    
+    /* Original puzzle numbers - black on white */
+    .sudoku-cell.prefilled-cell {
+      background-color: #f5f5f5 !important;
+      color: #000 !important;
+      font-weight: 900 !important;
+    }
+    
+    /* User-entered correct numbers - green */
+    .sudoku-cell.correct-number-cell {
+      background-color: #fff !important;
+      color: #4CAF50 !important;
+      font-weight: bold !important;
+    }
+    
+    /* User-entered wrong numbers - red */
+    .sudoku-cell.wrong-number-cell {
+      background-color: #fff !important;
+      color: #f44336 !important;
+      font-weight: bold !important;
+    }
+    
+    /* Hint numbers - yellow on white */
+    .sudoku-cell.hint-number-cell {
+      background-color: #fff !important;
+      color: #FF9800 !important;
+      font-weight: 900 !important;
+      text-shadow: 0 0 2px rgba(255, 152, 0, 0.3);
+    }
+    
+    /* Selected hint cell gets special border */
+    .sudoku-cell.hint-number-cell.selected-cell {
+      border: 2px solid #FF9800 !important;
+      box-shadow: 0 0 8px rgba(255, 152, 0, 0.4) !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 const styles = {
   container: {
@@ -188,19 +285,6 @@ const styles = {
     transition: 'all 0.2s ease',
     userSelect: 'none',
   },
-  selectedCell: {
-    backgroundColor: '#4CAF50',
-    color: 'white',
-  },
-  prefilledCell: {
-    backgroundColor: '#f5f5f5',
-    color: '#333',
-    fontWeight: '900',
-  },
-  errorCell: {
-    backgroundColor: '#ffebee',
-    color: '#d32f2f',
-  },
   disabledCell: {
     opacity: 0.6,
   },
@@ -244,6 +328,15 @@ const styles = {
     borderRadius: '12px',
     boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
     animation: 'pulse 2s infinite',
+  },
+  hintDebug: {
+    fontSize: '12px',
+    color: '#666',
+    fontFamily: 'monospace',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    padding: '5px 10px',
+    borderRadius: '5px',
+    marginTop: '10px',
   },
 };
 

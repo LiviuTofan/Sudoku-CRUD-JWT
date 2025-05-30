@@ -187,11 +187,147 @@ class ApiService {
     });
   }
 
-  async solvePuzzle(id, currentState = null, hint = false) {
-    return await this.request(`/puzzles/${id}/solve`, {
-      method: 'POST',
-      body: JSON.stringify({ currentState, hint }),
-    });
+  // Fixed solvePuzzle method for ApiService class
+  async solvePuzzle(id, requestData) {
+    console.log('🔄 ApiService.solvePuzzle called with:', {
+      id,
+      requestDataType: typeof requestData,
+      hasCurrentState: !!requestData?.currentState,
+      hint: requestData?.hint
+    })
+    
+    try {
+      // CRITICAL FIX: Ensure we're sending clean, serializable data
+      let cleanRequestData = null
+      
+      if (requestData) {
+        // Create a completely clean object
+        cleanRequestData = {}
+        
+        // Handle currentState
+        if (requestData.currentState) {
+          if (!Array.isArray(requestData.currentState)) {
+            throw new Error('currentState must be an array')
+          }
+          
+          // Create a completely new, clean array
+          cleanRequestData.currentState = requestData.currentState.map(row => {
+            if (!Array.isArray(row)) {
+              throw new Error('Each row in currentState must be an array')
+            }
+            return row.map(cell => {
+              // Ensure each cell is a clean integer
+              const numCell = Number(cell)
+              if (!Number.isInteger(numCell) || numCell < 0 || numCell > 9) {
+                throw new Error(`Invalid cell value: ${cell} (type: ${typeof cell})`)
+              }
+              return numCell
+            })
+          })
+        }
+        
+        // Handle hint flag
+        if (requestData.hint !== undefined) {
+          cleanRequestData.hint = Boolean(requestData.hint)
+        }
+      }
+      
+      console.log('🔄 Sending clean request data:', {
+        id,
+        cleanDataType: typeof cleanRequestData,
+        hasCurrentState: !!cleanRequestData?.currentState,
+        currentStateLength: cleanRequestData?.currentState?.length,
+        firstRowLength: cleanRequestData?.currentState?.[0]?.length,
+        hint: cleanRequestData?.hint,
+        sampleCells: cleanRequestData?.currentState?.[0]?.slice(0, 3)
+      })
+      
+      // Make the request with clean data
+      const response = await this.request(`/puzzles/${id}/solve`, {
+        method: 'POST',
+        body: JSON.stringify(cleanRequestData),
+      })
+      
+      console.log('✅ solvePuzzle response:', response)
+      return response
+      
+    } catch (error) {
+      console.error('❌ solvePuzzle error:', {
+        message: error.message,
+        stack: error.stack?.split('\n')[0]
+      })
+      throw error
+    }
+  }
+
+  // Alternative: You can also replace the entire request method to add better error handling
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    // Add authentication header if token exists
+    if (this.token) {
+      config.headers.Authorization = `Bearer ${this.token}`;
+    }
+
+    console.log('🌐 Making API request:', {
+      url,
+      method: config.method || 'GET',
+      hasBody: !!config.body,
+      bodyLength: config.body?.length,
+      headers: Object.keys(config.headers)
+    })
+
+    try {
+      const response = await fetch(url, config);
+      
+      console.log('🌐 API response status:', response.status, response.statusText)
+      
+      let data
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('❌ Failed to parse response JSON:', jsonError)
+        throw new Error(`Invalid JSON response from server (status: ${response.status})`)
+      }
+
+      if (!response.ok) {
+        console.error('❌ API error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          data
+        })
+        
+        // Extract more specific error information
+        let errorMessage = data.error || `HTTP error! status: ${response.status}`
+        
+        if (data.details && Array.isArray(data.details)) {
+          const validationErrors = data.details.map(detail => detail.msg || detail.message || detail).join('; ')
+          errorMessage += ` - Validation errors: ${validationErrors}`
+        }
+        
+        if (data.receivedBody) {
+          console.error('❌ Server received body:', data.receivedBody)
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('❌ API request failed:', {
+        url,
+        error: error.message,
+        stack: error.stack?.split('\n')[0]
+      })
+      throw error;
+    }
   }
 
   async validatePuzzle(id, currentState, move = null) {

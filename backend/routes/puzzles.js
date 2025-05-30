@@ -789,18 +789,33 @@ router.post('/:id/solve', authenticateToken, [
     body('currentState')
         .optional()
         .custom((currentState) => {
-            if (currentState && (!Array.isArray(currentState) || currentState.length !== 9)) {
+            // FIXED: More robust validation for currentState
+            if (currentState === null || currentState === undefined) {
+                return true; // Allow null/undefined for optional field
+            }
+            
+            if (!Array.isArray(currentState)) {
+                throw new Error('Current state must be an array');
+            }
+            
+            if (currentState.length !== 9) {
                 throw new Error('Current state must be a 9x9 grid');
             }
-            if (currentState) {
-                for (let row of currentState) {
-                    if (!Array.isArray(row) || row.length !== 9) {
-                        throw new Error('Each row must contain exactly 9 elements');
-                    }
-                    for (let cell of row) {
-                        if (!Number.isInteger(cell) || cell < 0 || cell > 9) {
-                            throw new Error('Each cell must be an integer between 0 and 9');
-                        }
+            
+            for (let i = 0; i < currentState.length; i++) {
+                const row = currentState[i];
+                if (!Array.isArray(row)) {
+                    throw new Error(`Row ${i} must be an array`);
+                }
+                if (row.length !== 9) {
+                    throw new Error(`Row ${i} must contain exactly 9 elements`);
+                }
+                for (let j = 0; j < row.length; j++) {
+                    const cell = row[j];
+                    // FIXED: Handle both string and number inputs
+                    const numCell = typeof cell === 'string' ? parseInt(cell, 10) : cell;
+                    if (!Number.isInteger(numCell) || numCell < 0 || numCell > 9) {
+                        throw new Error(`Cell at row ${i}, column ${j} must be an integer between 0 and 9 (got ${cell} of type ${typeof cell})`);
                     }
                 }
             }
@@ -814,9 +829,15 @@ router.post('/:id/solve', authenticateToken, [
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
+            console.error('Validation errors:', errors.array());
             return res.status(400).json({
                 error: 'Validation failed',
-                details: errors.array()
+                details: errors.array(),
+                // ADDED: More helpful debugging info
+                receivedBody: req.body,
+                bodyType: typeof req.body,
+                currentStateType: typeof req.body?.currentState,
+                currentStateLength: Array.isArray(req.body?.currentState) ? req.body.currentState.length : 'N/A'
             });
         }
 
@@ -830,7 +851,34 @@ router.post('/:id/solve', authenticateToken, [
         }
 
         const { currentState, hint = false } = req.body;
-        const workingGrid = currentState || puzzle.puzzle;
+        
+        // FIXED: Normalize currentState to ensure all values are integers
+        let workingGrid = currentState || puzzle.puzzle;
+        
+        if (currentState) {
+            // Sanitize the current state to ensure all values are proper integers
+            workingGrid = currentState.map((row, rowIndex) => {
+                return row.map((cell, colIndex) => {
+                    const numCell = typeof cell === 'string' ? parseInt(cell, 10) : cell;
+                    if (isNaN(numCell) || numCell < 0 || numCell > 9) {
+                        console.warn(`Invalid cell at [${rowIndex}][${colIndex}]: ${cell}, defaulting to 0`);
+                        return 0;
+                    }
+                    return numCell;
+                });
+            });
+        }
+
+        // Additional validation: ensure workingGrid is compatible with original puzzle
+        if (currentState) {
+            const originalViolations = validateAgainstOriginal(puzzle.puzzle, workingGrid);
+            if (originalViolations.length > 0) {
+                return res.status(400).json({
+                    error: 'Current state violates original puzzle constraints',
+                    details: originalViolations
+                });
+            }
+        }
 
         if (hint) {
             // Provide a single hint
@@ -865,10 +913,69 @@ router.post('/:id/solve', authenticateToken, [
         console.error('Solve puzzle error:', error);
         res.status(500).json({
             error: 'Failed to solve puzzle',
-            code: 'SOLVE_PUZZLE_ERROR'
+            code: 'SOLVE_PUZZLE_ERROR',
+            details: error.message
         });
     }
 });
+
+// ADDED: Helper function to validate current state against original puzzle
+function validateAgainstOriginal(originalPuzzle, currentState) {
+    const violations = [];
+    
+    for (let i = 0; i < 9; i++) {
+        for (let j = 0; j < 9; j++) {
+            // If original puzzle has a number (not 0), current state must match
+            if (originalPuzzle[i][j] !== 0 && originalPuzzle[i][j] !== currentState[i][j]) {
+                violations.push({
+                    row: i,
+                    col: j,
+                    expected: originalPuzzle[i][j],
+                    actual: currentState[i][j],
+                    message: `Original puzzle cell [${i}][${j}] is ${originalPuzzle[i][j]} but current state has ${currentState[i][j]}`
+                });
+            }
+        }
+    }
+    
+    return violations;
+}
+
+// ADDED: Helper function to get next hint
+function getNextHint(currentGrid, solution) {
+    // Find the first empty cell where we can provide a hint
+    for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+            if (currentGrid[row][col] === 0 && solution[row][col] !== 0) {
+                return {
+                    row: row,
+                    col: col,
+                    value: solution[row][col]
+                };
+            }
+        }
+    }
+    return null; // No hints available
+}
+
+// ADDED: Helper function to get solution steps
+function getSolutionSteps(currentGrid, solution) {
+    const steps = [];
+    
+    for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+            if (currentGrid[row][col] === 0 && solution[row][col] !== 0) {
+                steps.push({
+                    row: row,
+                    col: col,
+                    value: solution[row][col]
+                });
+            }
+        }
+    }
+    
+    return steps;
+}
 
 /**
  * @swagger
