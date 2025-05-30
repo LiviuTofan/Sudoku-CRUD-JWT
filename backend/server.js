@@ -11,6 +11,7 @@ const errorHandler = require('./middleware/errorHandler');
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const puzzleRoutes = require('./routes/puzzles'); // Add this line
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -71,15 +72,16 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
  *         description: Server is healthy
  */
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
+    res.json({
+        status: 'OK',
         timestamp: new Date().toISOString(),
         version: '1.0.0'
     });
 });
 
 // API Routes
-app.use('/auth', authRoutes);
+app.use('/api/auth', authRoutes);        // Changed from '/auth' to '/api/auth'
+app.use('/api/puzzles', puzzleRoutes);   // Add this line
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -89,7 +91,8 @@ app.get('/', (req, res) => {
         documentation: '/api-docs',
         endpoints: {
             health: '/health',
-            auth: '/auth',
+            auth: '/api/auth',
+            puzzles: '/api/puzzles',    // Add this line
         }
     });
 });
