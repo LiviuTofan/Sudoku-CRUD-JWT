@@ -965,6 +965,7 @@ router.post('/:id/validate', [
         })
 ], async (req, res) => {
     try {
+        // Changed variable name to avoid collision
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({
@@ -994,7 +995,8 @@ router.post('/:id/validate', [
             });
         }
 
-        let validationResult = {
+        // Renamed to avoid collision with express-validator's validationResult
+        let puzzleValidation = {
             valid: true,
             complete: false,
             violations: [],
@@ -1006,26 +1008,26 @@ router.post('/:id/validate', [
         // If a specific move is provided, validate it
         if (move) {
             const moveValidation = validateMove(currentState, move, puzzle.solution);
-            validationResult = { ...validationResult, ...moveValidation };
+            puzzleValidation = { ...puzzleValidation, ...moveValidation };
         }
 
         // Validate current state for Sudoku rules
         const sudokuValidation = validateSudokuState(currentState);
-        validationResult.violations = [...validationResult.violations, ...sudokuValidation.violations];
-        validationResult.valid = validationResult.valid && sudokuValidation.valid;
+        puzzleValidation.violations = [...puzzleValidation.violations, ...sudokuValidation.violations];
+        puzzleValidation.valid = puzzleValidation.valid && sudokuValidation.valid;
 
         // Check progress and completion
         const progress = calculateProgress(currentState, puzzle.solution);
-        validationResult.correctCells = progress.correct;
-        validationResult.progress = Math.round((progress.correct / 81) * 100);
-        validationResult.complete = progress.complete;
+        puzzleValidation.correctCells = progress.correct;
+        puzzleValidation.progress = Math.round((progress.correct / 81) * 100);
+        puzzleValidation.complete = progress.complete;
 
         // Provide hints for violations if any
-        if (validationResult.violations.length > 0) {
-            validationResult.hints = generateHintsForViolations(validationResult.violations);
+        if (puzzleValidation.violations.length > 0) {
+            puzzleValidation.hints = generateHintsForViolations(puzzleValidation.violations);
         }
 
-        res.json(validationResult);
+        res.json(puzzleValidation);
 
     } catch (error) {
         console.error('Validate puzzle error:', error);
@@ -1035,7 +1037,6 @@ router.post('/:id/validate', [
         });
     }
 });
-
 // Helper functions for puzzle generation and validation
 
 function generateSudokuPuzzle(difficulty) {
