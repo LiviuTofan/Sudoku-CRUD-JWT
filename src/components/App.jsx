@@ -1,4 +1,4 @@
-// App.jsx - Fixed Version with Persistent Yellow Hint Highlighting
+// App.jsx - Updated Version with Role-based Features
 import React, { useState, useEffect } from 'react'
 import SudokuBoard from './SudokuBoard'
 import DifficultySelector from './DifficultySelector'
@@ -17,7 +17,6 @@ function App() {
   const [userProgress, setUserProgress] = useState(null)
   const [originalPuzzle, setOriginalPuzzle] = useState(null)
   
-  // FIXED: Add hint cells tracking (removed auto-removal timer)
   const [hintCells, setHintCells] = useState(new Set())
   
   const [theme, setTheme] = useState(() => {
@@ -32,6 +31,9 @@ function App() {
     progress: 0,
     violations: []
   })
+
+  // New state for delete functionality
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -112,7 +114,6 @@ function App() {
   const loadPuzzleData = async (puzzleData) => {
     console.log('📥 Loading puzzle data:', puzzleData.id)
     
-    // Set all puzzle states in one batch to prevent multiple renders
     setOriginalPuzzle(puzzleData.puzzle)
     setPuzzle(puzzleData.puzzle)
     setUserProgress(puzzleData.puzzle)
@@ -120,10 +121,8 @@ function App() {
     setCurrentPuzzleId(puzzleData.id)
     setDifficulty(puzzleData.difficulty)
     
-    // FIXED: Reset hint cells when loading new puzzle (this is correct)
     setHintCells(new Set())
     
-    // Reset game stats
     setGameStats({
       isComplete: false,
       correctCells: 0,
@@ -133,7 +132,6 @@ function App() {
     
     console.log('🎯 Puzzle loaded with ID:', puzzleData.id)
     
-    // Validate the current state
     if (puzzleData.puzzle) {
       await validatePuzzleState(puzzleData.id, puzzleData.puzzle)
     }
@@ -155,7 +153,7 @@ function App() {
     setCurrentPuzzleId(null)
     setUserProgress(null)
     setOriginalPuzzle(null)
-    setHintCells(new Set()) // FIXED: Reset hint cells on logout
+    setHintCells(new Set())
     setGameStats({
       isComplete: false,
       correctCells: 0,
@@ -190,7 +188,6 @@ function App() {
         difficulty: difficulty
       }
       
-      // Extract puzzle data from response
       if (response.puzzle.puzzle) {
         puzzleData.puzzle = response.puzzle.puzzle
       } else {
@@ -254,7 +251,6 @@ function App() {
         return null
       }
       
-      // Sanitize puzzle state
       const sanitizedState = puzzleState.map((row, rowIndex) => {
         if (!Array.isArray(row) || row.length !== 9) {
           console.error(`❌ Invalid row ${rowIndex}:`, row)
@@ -279,7 +275,6 @@ function App() {
         violations: result.violations?.length || 0
       })
       
-      // Update game stats based on validation
       setGameStats({
         isComplete: result.complete || false,
         correctCells: result.correctCells || 0,
@@ -296,6 +291,13 @@ function App() {
   }
 
   const handleCellChange = async (row, col, value) => {
+    // Block cell changes for visitors
+    if (user?.role === 'visitor') {
+      setError('👁 Visitors can only view puzzles. You cannot solve them.')
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
     console.log(`🎯 Cell change: [${row}, ${col}] = ${value}`)
     
     if (!userProgress || !originalPuzzle) {
@@ -340,8 +342,14 @@ function App() {
     }
   }
 
-  // FIXED: Hint function with persistent yellow highlighting
   const getHint = async () => {
+    // Block hints for visitors
+    if (user?.role === 'visitor') {
+      setError('👁 Visitors cannot get hints. You can only view puzzles.')
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
     if (!currentPuzzleId || !userProgress) {
       console.log('❌ Cannot get hint: missing puzzle ID or progress')
       setError('Cannot get hint: puzzle not loaded properly')
@@ -419,7 +427,6 @@ function App() {
         hint: true
       }
       
-      // Test JSON serialization
       try {
         const testSerialization = JSON.stringify(requestPayload)
         const testDeserialization = JSON.parse(testSerialization)
@@ -443,7 +450,6 @@ function App() {
         
         console.log(`💡 Applying hint: [${row}, ${col}] = ${value}`)
         
-        // Validate hint values
         if (
           !Number.isInteger(row) || row < 0 || row > 8 ||
           !Number.isInteger(col) || col < 0 || col > 8 ||
@@ -454,11 +460,8 @@ function App() {
           return
         }
         
-        // FIXED: Add hint cell to tracking set (without auto-removal timer)
         const hintKey = `${row}-${col}`
         setHintCells(prev => new Set([...prev, hintKey]))
-        
-        // REMOVED: Auto-removal timer - hints now persist!
         
         const newProgress = cleanGrid.map(r => [...r])
         newProgress[row][col] = value
@@ -466,7 +469,6 @@ function App() {
         setUserProgress(newProgress)
         setPuzzle(newProgress)
         
-        // Update validation and save state
         await validatePuzzleState(currentPuzzleId, newProgress)
         await updatePuzzleState(newProgress)
         
@@ -521,6 +523,13 @@ function App() {
   }
 
   const solvePuzzle = async () => {
+    // Block solving for visitors
+    if (user?.role === 'visitor') {
+      setError('👁 Visitors cannot solve puzzles. You can only view them.')
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
     if (!currentPuzzleId || !userProgress) {
       console.log('❌ Cannot solve puzzle: missing puzzle ID or progress')
       return
@@ -555,7 +564,6 @@ function App() {
         setUserProgress(solutionResponse.solution)
         setPuzzle(solutionResponse.solution)
         
-        // FIXED: Clear hint highlighting when puzzle is solved (this is correct)
         setHintCells(new Set())
         
         setGameStats({
@@ -576,11 +584,18 @@ function App() {
   }
 
   const resetPuzzle = () => {
+    // Block reset for visitors
+    if (user?.role === 'visitor') {
+      setError('👁 Visitors cannot reset puzzles. You can only view them.')
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
     console.log('🔄 Resetting puzzle...')
     if (originalPuzzle) {
       setUserProgress(originalPuzzle)
       setPuzzle(originalPuzzle)
-      setHintCells(new Set()) // FIXED: Clear hint highlighting on reset (this is correct)
+      setHintCells(new Set())
       setGameStats({
         isComplete: false,
         correctCells: 0,
@@ -591,6 +606,71 @@ function App() {
       console.log('✅ Puzzle reset to original state')
     } else {
       console.log('❌ Cannot reset: no original puzzle')
+    }
+  }
+
+  // NEW: Delete puzzle function (admin only)
+  const deletePuzzle = async () => {
+    if (user?.role !== 'admin') {
+      setError('🔒 Only administrators can delete puzzles!')
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
+    if (!currentPuzzleId) {
+      setError('No puzzle to delete')
+      return
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete puzzle #${currentPuzzleId}? This action cannot be undone.`
+    )
+
+    if (!confirmDelete) {
+      return
+    }
+
+    setDeleting(true)
+    setError('')
+
+    try {
+      await apiService.deletePuzzle(currentPuzzleId)
+      console.log('🗑️ Puzzle deleted successfully')
+      
+      // Clear current puzzle state
+      setPuzzle(null)
+      setSolution(null)
+      setCurrentPuzzleId(null)
+      setUserProgress(null)
+      setOriginalPuzzle(null)
+      setHintCells(new Set())
+      setGameStats({
+        isComplete: false,
+        correctCells: 0,
+        progress: 0,
+        violations: []
+      })
+
+      // Try to load another puzzle or generate a new one
+      try {
+        const puzzlesResponse = await apiService.getPuzzles(1, 1)
+        if (puzzlesResponse.puzzles && puzzlesResponse.puzzles.length > 0) {
+          const nextPuzzle = puzzlesResponse.puzzles[0]
+          await loadPuzzleData(nextPuzzle)
+        } else {
+          console.log('No more puzzles, generating new one...')
+          await generateNewPuzzle()
+        }
+      } catch (loadError) {
+        console.error('Failed to load next puzzle:', loadError)
+        setError('Puzzle deleted successfully, but failed to load next puzzle. Click "New Game" to continue.')
+      }
+
+    } catch (error) {
+      console.error('❌ Failed to delete puzzle:', error)
+      setError('Failed to delete puzzle. Please try again.')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -661,6 +741,9 @@ function App() {
               {user.role === 'admin' && (
                 <span className="admin-badge">Admin</span>
               )}
+              {user.role === 'visitor' && (
+                <span className="visitor-badge">Visitor</span>
+              )}
             </span>
           )}
         </div>
@@ -712,30 +795,51 @@ function App() {
               'New Game'
             )}
           </button>
+          
+          {/* NEW: Delete button (admin only) */}
+          {user?.role === 'admin' && currentPuzzleId && (
+            <button 
+              className="delete-btn" 
+              onClick={deletePuzzle}
+              disabled={deleting || generatingPuzzle}
+              title="Delete current puzzle (Admin only)"
+            >
+              {deleting ? (
+                <span className="button-loading">
+                  <span className="spinner small"></span>
+                  Deleting...
+                </span>
+              ) : (
+                '🗑️ Delete'
+              )}
+            </button>
+          )}
         </div>
 
-        {/* Enhanced Debug Info */}
-        <div style={{ 
-          background: 'rgba(0,0,0,0.1)', 
-          padding: '10px', 
-          margin: '10px 0', 
-          borderRadius: '5px',
-          fontSize: '12px',
-          fontFamily: 'monospace'
-        }}>
-          <div>🆔 Puzzle ID: {currentPuzzleId || 'null'}</div>
-          <div>🎚️ Difficulty: {difficulty}</div>
-          <div>🧩 Puzzle: {puzzle ? 'Loaded' : 'None'}</div>
-          <div>🎯 Solution: {solution ? 'Available' : 'Missing'}</div>
-          <div>📊 Progress: {userProgress ? 'Tracked' : 'None'}</div>
-          <div>🔄 Status: {generatingPuzzle ? 'Generating...' : 'Ready'}</div>
-          <div>✅ Complete: {gameStats.isComplete ? 'Yes' : 'No'}</div>
-          <div>📈 Progress: {gameStats.progress}% ({gameStats.correctCells}/81)</div>
-          <div>💡 Hint Cells: {hintCells.size} active (persistent)</div>
-          <div>🐛 UserProgress Valid: {userProgress ? 
-            `${Array.isArray(userProgress) ? userProgress.length : 'Not Array'}x${Array.isArray(userProgress?.[0]) ? userProgress[0].length : 'Invalid'}` 
-            : 'None'}</div>
-        </div>
+        {/* Admin-only Debug Info */}
+        {user?.role === 'admin' && (
+          <div style={{ 
+            background: 'rgba(0,0,0,0.1)', 
+            padding: '10px', 
+            margin: '10px 0', 
+            borderRadius: '5px',
+            fontSize: '12px',
+            fontFamily: 'monospace'
+          }}>
+            <div>🆔 Puzzle ID: {currentPuzzleId || 'null'}</div>
+            <div>🎚️ Difficulty: {difficulty}</div>
+            <div>🧩 Puzzle: {puzzle ? 'Loaded' : 'None'}</div>
+            <div>🎯 Solution: {solution ? 'Available' : 'Missing'}</div>
+            <div>📊 Progress: {userProgress ? 'Tracked' : 'None'}</div>
+            <div>🔄 Status: {generatingPuzzle ? 'Generating...' : 'Ready'}</div>
+            <div>✅ Complete: {gameStats.isComplete ? 'Yes' : 'No'}</div>
+            <div>📈 Progress: {gameStats.progress}% ({gameStats.correctCells}/81)</div>
+            <div>💡 Hint Cells: {hintCells.size} active (persistent)</div>
+            <div>🐛 UserProgress Valid: {userProgress ? 
+              `${Array.isArray(userProgress) ? userProgress.length : 'Not Array'}x${Array.isArray(userProgress?.[0]) ? userProgress[0].length : 'Invalid'}` 
+              : 'None'}</div>
+          </div>
+        )}
 
         {gameStats && puzzle && (
           <div className="game-stats">
@@ -744,56 +848,55 @@ function App() {
               <span>Correct: {gameStats.correctCells}/81</span>
               {gameStats.isComplete && <span className="completed">🎉 Completed!</span>}
             </div>
-            {gameStats.violations && gameStats.violations.length > 0 && (
+            {gameStats.violations && gameStats.violations.length> 0 && (
               <div className="violations">
-                <span className="violations-count">⚠️ {gameStats.violations.length} error(s)</span>
+                <span>⚠️ {gameStats.violations.length} violation{gameStats.violations.length !== 1 ? 's' : ''}</span>
               </div>
             )}
           </div>
         )}
 
-        {puzzle && !gameStats.isComplete && (
-          <div className="game-actions">
-            <button 
-              className="hint-btn" 
-              onClick={getHint}
-              disabled={generatingPuzzle || !solution || !currentPuzzleId}
-              title={
-                !solution ? "Solution not available for hints" : 
-                !currentPuzzleId ? "Puzzle ID missing" :
-                "Get a hint (will stay highlighted until new game/reset)"
-              }
-            >
-              💡 Hint
-            </button>
-            <button 
-              className="solve-btn" 
-              onClick={solvePuzzle}
-              disabled={generatingPuzzle}
-            >
-              🔍 Solve
-            </button>
-            <button 
-              className="reset-btn" 
-              onClick={resetPuzzle}
-              disabled={generatingPuzzle}
-            >
-              🔄 Reset
-            </button>
+        {puzzle && (
+          <div className="game-container">
+            <SudokuBoard
+              puzzle={puzzle}
+              solution={solution}
+              originalPuzzle={originalPuzzle}
+              onCellChange={handleCellChange}
+              hintCells={hintCells}
+              violations={gameStats.violations || []}
+              readOnly={user?.role === 'visitor'}
+            />
+            
+            <div className="game-actions">
+              <button 
+                className="hint-btn" 
+                onClick={getHint}
+                disabled={gameStats.isComplete || user?.role === 'visitor'}
+                title={user?.role === 'visitor' ? 'Visitors cannot get hints' : 'Get a hint for the next move'}
+              >
+                💡 Hint
+              </button>
+              
+              <button 
+                className="solve-btn" 
+                onClick={solvePuzzle}
+                disabled={gameStats.isComplete || user?.role === 'visitor'}
+                title={user?.role === 'visitor' ? 'Visitors cannot solve puzzles' : 'Solve the entire puzzle'}
+              >
+                🔍 Solve
+              </button>
+              
+              <button 
+                className="reset-btn" 
+                onClick={resetPuzzle}
+                disabled={user?.role === 'visitor'}
+                title={user?.role === 'visitor' ? 'Visitors cannot reset puzzles' : 'Reset to original puzzle'}
+              >
+                🔄 Reset
+              </button>
+            </div>
           </div>
-        )}
-
-        {puzzle && solution && (
-          <SudokuBoard 
-            puzzle={puzzle} 
-            originalPuzzle={originalPuzzle}
-            solution={solution}
-            onCellChange={handleCellChange}
-            disabled={generatingPuzzle}
-            violations={gameStats.violations}
-            isComplete={gameStats.isComplete}
-            hintCells={hintCells} // FIXED: Pass persistent hint cells to board
-          />
         )}
 
         {!puzzle && !generatingPuzzle && (
@@ -802,6 +905,13 @@ function App() {
           </div>
         )}
       </main>
+
+      <footer className="app-footer">
+        <p>Sudoku Game - Enjoy solving puzzles!</p>
+        {currentPuzzleId && (
+          <p className="puzzle-id">Puzzle #{currentPuzzleId}</p>
+        )}
+      </footer>
     </div>
   )
 }
