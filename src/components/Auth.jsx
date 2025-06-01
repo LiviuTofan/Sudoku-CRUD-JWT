@@ -8,9 +8,16 @@ function Auth({ onAuthSuccess }) {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
+    role: 'user' // Default role
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  const roles = [
+    { value: 'user', label: '👤 Member', description: 'Can play and create puzzles' },
+    { value: 'admin', label: '👑 Admin', description: 'Club owner - full access' },
+    { value: 'visitor', label: '👁 Visitor', description: 'Browse puzzles only' }
+  ];
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -45,6 +52,10 @@ function Auth({ onAuthSuccess }) {
       newErrors.password = 'Password must be at least 6 characters long';
     }
 
+    if (!isLogin && !formData.role) {
+      newErrors.role = 'Please select a role';
+    }
+
     return newErrors;
   };
 
@@ -63,7 +74,7 @@ function Auth({ onAuthSuccess }) {
     try {
       const response = isLogin 
         ? await apiService.login(formData.username, formData.password)
-        : await apiService.register(formData.username, formData.password);
+        : await apiService.register(formData.username, formData.password, formData.role);
 
       onAuthSuccess(response);
     } catch (error) {
@@ -85,7 +96,7 @@ function Auth({ onAuthSuccess }) {
 
   const switchMode = () => {
     setIsLogin(!isLogin);
-    setFormData({ username: '', password: '' });
+    setFormData({ username: '', password: '', role: 'user' });
     setErrors({});
   };
 
@@ -137,6 +148,32 @@ function Auth({ onAuthSuccess }) {
               <span className="error-message">{errors.password}</span>
             )}
           </div>
+
+          {!isLogin && (
+            <div className="form-group">
+              <label htmlFor="role">Role</label>
+              <select
+                id="role"
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+                className={errors.role ? 'error' : ''}
+                disabled={loading}
+              >
+                {roles.map(role => (
+                  <option key={role.value} value={role.value}>
+                    {role.label} - {role.description}
+                  </option>
+                ))}
+              </select>
+              {errors.role && (
+                <span className="error-message">{errors.role}</span>
+              )}
+              <small className="role-help">
+                Choose your role in the Sudoku club
+              </small>
+            </div>
+          )}
 
           <button 
             type="submit" 

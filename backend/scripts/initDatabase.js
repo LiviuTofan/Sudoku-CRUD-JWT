@@ -14,7 +14,7 @@ async function initDatabase() {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password TEXT NOT NULL,
-                role TEXT DEFAULT 'user' CHECK(role IN ('user', 'admin')),
+                role TEXT DEFAULT 'user' CHECK(role IN ('visitor', 'user', 'admin')),
                 created_at TEXT NOT NULL
             )
         `);
