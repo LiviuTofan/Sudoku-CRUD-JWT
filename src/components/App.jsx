@@ -260,24 +260,17 @@ function App() {
           }}>
             <div>🆔 Puzzle ID: {currentPuzzleId || 'null'}</div>
             <div>🎚️ Difficulty: {difficulty}</div>
-            <div>🧩 Puzzle: {puzzle ? 'Loaded' : 'None'}</div>
-            <div>🎯 Solution: {solution ? 'Available' : 'Missing'}</div>
             <div>📊 Progress: {userProgress ? 'Tracked' : 'None'}</div>
-            <div>🔄 Status: {generatingPuzzle ? 'Generating...' : 'Ready'}</div>
             <div>✅ Complete: {gameStats.isComplete ? 'Yes' : 'No'}</div>
             <div>📈 Progress: {gameStats.progress}% ({gameStats.correctCells}/81)</div>
             <div>💡 Hint Cells: {hintCells.size} active (persistent)</div>
-            <div>🐛 UserProgress Valid: {userProgress ? 
-              `${Array.isArray(userProgress) ? userProgress.length : 'Not Array'}x${Array.isArray(userProgress?.[0]) ? userProgress[0].length : 'Invalid'}` 
-              : 'None'}</div>
-          </div>
+            </div> 
         )}
 
         {gameStats && puzzle && (
           <div className="game-stats">
             <div className="progress-info">
-              <span>Progress: {gameStats.progress}%</span>
-              <span>Correct: {gameStats.correctCells}/81</span>
+              <span><strong>Steps to solve: {81 - gameStats.correctCells}</strong></span>
               {gameStats.isComplete && <span className="completed">🎉 Completed!</span>}
             </div>
           </div>

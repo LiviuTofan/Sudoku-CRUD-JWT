@@ -2,8 +2,8 @@
 
 .game-controls {
     display: flex;
-    gap: 20px;
-    align-items: center;
+    gap: 24px;
+    align-items: flex-start;
     margin-bottom: 30px;
     flex-wrap: wrap;
     justify-content: center;
