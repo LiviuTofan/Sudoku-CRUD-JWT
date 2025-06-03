@@ -1,14 +1,7 @@
-// services/api.js - Fixed version with correct URL configuration
 class ApiService {
   constructor() {
-    // Fix: Detect if we're in development or production
     const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    // IMPORTANT: Remove '/api' from baseURL since your backend routes already include it
     this.baseURL = isDevelopment ? 'http://localhost:3000' : 'http://localhost:3000';
-    
-    // Alternative: You can also hardcode it for now
-    // this.baseURL = 'http://localhost:3000';
     
     this.token = null;
     
@@ -20,7 +13,6 @@ class ApiService {
     }
   }
 
-  // Helper method to make authenticated requests
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     const config = {
@@ -49,7 +41,6 @@ class ApiService {
       
       console.log('🌐 API response status:', response.status, response.statusText);
       
-      // Check if response has content before trying to parse JSON
       const contentType = response.headers.get('content-type');
       let data = null;
       
@@ -57,24 +48,22 @@ class ApiService {
         try {
           data = await response.json();
         } catch (jsonError) {
-          console.error('❌ Failed to parse response JSON:', jsonError);
+          console.error('Failed to parse response JSON:', jsonError);
           throw new Error(`Invalid JSON response from server (status: ${response.status})`);
         }
       } else {
-        // If not JSON, get text response for debugging
         const textResponse = await response.text();
-        console.error('❌ Non-JSON response:', textResponse);
+        console.error('Non-JSON response:', textResponse);
         throw new Error(`Server returned non-JSON response (status: ${response.status}): ${textResponse}`);
       }
 
       if (!response.ok) {
-        console.error('❌ API error response:', {
+        console.error('API error response:', {
           status: response.status,
           statusText: response.statusText,
           data
         });
         
-        // Extract more specific error information
         let errorMessage = data?.error || `HTTP error! status: ${response.status}`;
         
         if (data?.details && Array.isArray(data.details)) {
@@ -87,7 +76,7 @@ class ApiService {
 
       return data;
     } catch (error) {
-      console.error('❌ API request failed:', {
+      console.error('API request failed:', {
         url,
         error: error.message,
         stack: error.stack?.split('\n')[0]
@@ -96,7 +85,6 @@ class ApiService {
     }
   }
 
-  // Authentication methods
   async register(username, password, role = 'user') {
     const response = await this.request('/api/auth/register', {
       method: 'POST',
@@ -113,8 +101,13 @@ class ApiService {
       }
     }
 
-    return response;
-  }
+    return {
+      ...response,
+      token: response.accessToken, 
+      username: response.user?.username,
+      role: response.user?.role
+    };
+}
 
   async login(username, password) {
     const response = await this.request('/api/auth/login', {
@@ -132,8 +125,13 @@ class ApiService {
       }
     }
 
-    return response;
-  }
+    return {
+      ...response,
+      token: response.accessToken,
+      username: response.user?.username,
+      role: response.user?.role
+    };
+}
 
   async verifyToken() {
     if (!this.token) {
@@ -233,7 +231,7 @@ class ApiService {
   }
 
   async solvePuzzle(id, requestData) {
-    console.log('🔄 ApiService.solvePuzzle called with:', {
+    console.log('ApiService.solvePuzzle called with:', {
       id,
       requestDataType: typeof requestData,
       hasCurrentState: !!requestData?.currentState,
@@ -241,26 +239,21 @@ class ApiService {
     });
     
     try {
-      // CRITICAL FIX: Ensure we're sending clean, serializable data
       let cleanRequestData = null;
       
       if (requestData) {
-        // Create a completely clean object
         cleanRequestData = {};
         
-        // Handle currentState
         if (requestData.currentState) {
           if (!Array.isArray(requestData.currentState)) {
             throw new Error('currentState must be an array');
           }
           
-          // Create a completely new, clean array
           cleanRequestData.currentState = requestData.currentState.map(row => {
             if (!Array.isArray(row)) {
               throw new Error('Each row in currentState must be an array');
             }
             return row.map(cell => {
-              // Ensure each cell is a clean integer
               const numCell = Number(cell);
               if (!Number.isInteger(numCell) || numCell < 0 || numCell > 9) {
                 throw new Error(`Invalid cell value: ${cell} (type: ${typeof cell})`);
@@ -270,7 +263,6 @@ class ApiService {
           });
         }
         
-        // Handle hint flag
         if (requestData.hint !== undefined) {
           cleanRequestData.hint = Boolean(requestData.hint);
         }
@@ -286,17 +278,16 @@ class ApiService {
         sampleCells: cleanRequestData?.currentState?.[0]?.slice(0, 3)
       });
       
-      // Make the request with clean data
       const response = await this.request(`/api/puzzles/${id}/solve`, {
         method: 'POST',
         body: JSON.stringify(cleanRequestData),
       });
       
-      console.log('✅ solvePuzzle response:', response);
+      console.log('solvePuzzle response:', response);
       return response;
       
     } catch (error) {
-      console.error('❌ solvePuzzle error:', {
+      console.error('solvePuzzle error:', {
         message: error.message,
         stack: error.stack?.split('\n')[0]
       });

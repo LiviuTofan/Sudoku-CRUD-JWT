@@ -1,4 +1,3 @@
-// components/Auth.jsx
 import React, { useState } from 'react';
 import apiService from '../services/api';
 import '../styles/Auth.css';
@@ -8,7 +7,7 @@ function Auth({ onAuthSuccess }) {
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    role: 'user' // Default role
+    role: 'user'
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -38,6 +37,7 @@ function Auth({ onAuthSuccess }) {
   const validateForm = () => {
     const newErrors = {};
 
+    // Username validation
     if (!formData.username.trim()) {
       newErrors.username = 'Username is required';
     } else if (formData.username.length < 3) {
@@ -46,12 +46,14 @@ function Auth({ onAuthSuccess }) {
       newErrors.username = 'Username must contain only letters and numbers';
     }
 
+    // Password validation
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters long';
     }
-
+    
+    // Role validation (only for registration)
     if (!isLogin && !formData.role) {
       newErrors.role = 'Please select a role';
     }

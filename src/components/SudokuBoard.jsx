@@ -1,5 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import '../styles/SudokuBoard.css';
+
+const useDeepCompareEffect = (callback, dependencies) => {
+  const ref = useRef();
+  const signalRef = useRef(0);
+  
+  // Deep equality check for 2D arrays
+  const deepEqual = (a, b) => {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    if (!Array.isArray(a) || !Array.isArray(b)) return a === b;
+    if (a.length !== b.length) return false;
+    return a.every((row, i) => {
+      if (!Array.isArray(row) || !Array.isArray(b[i])) return row === b[i];
+      if (row.length !== b[i].length) return false;
+      return row.every((cell, j) => cell === b[i][j]);
+    });
+  };
+  
+  if (!ref.current || !deepEqual(dependencies[0], ref.current[0])) {
+    ref.current = dependencies;
+    signalRef.current += 1;
+  }
+  
+  useEffect(callback, [signalRef.current]);
+};
 
 const SudokuBoard = ({ 
   puzzle, 
@@ -15,13 +40,26 @@ const SudokuBoard = ({
   const [selectedCell, setSelectedCell] = useState(null);
   const [errors, setErrors] = useState(Array(9).fill().map(() => Array(9).fill(false)));
 
-  // Initialize board when puzzle changes
-  useEffect(() => {
-    console.log('SudokuBoard: puzzle prop changed:', puzzle);
-    if (puzzle) {
-      setBoard(puzzle.map(row => [...row]));
-      // Reset errors when new puzzle loads
-      setErrors(Array(9).fill().map(() => Array(9).fill(false)));
+  // Use deep comparison for puzzle updates - FIXED: Added proper dependency handling
+  useDeepCompareEffect(() => {
+    if (puzzle && Array.isArray(puzzle)) {
+      const newBoard = puzzle.map(row => [...row]);
+      const newErrors = Array(9).fill().map(() => Array(9).fill(false));
+      
+      // Only update if actually different to prevent loops
+      setBoard(prevBoard => {
+        const isDifferent = !prevBoard.every((row, i) => 
+          row.every((cell, j) => cell === newBoard[i][j])
+        );
+        return isDifferent ? newBoard : prevBoard;
+      });
+      
+      setErrors(prevErrors => {
+        const isDifferent = !prevErrors.every((row, i) => 
+          row.every((cell, j) => cell === newErrors[i][j])
+        );
+        return isDifferent ? newErrors : prevErrors;
+      });
     }
   }, [puzzle]);
 
@@ -33,7 +71,14 @@ const SudokuBoard = ({
         newErrors[violation.row][violation.col] = true;
       }
     });
-    setErrors(newErrors);
+    
+    // Only update if different
+    setErrors(prevErrors => {
+      const isDifferent = !prevErrors.every((row, i) => 
+        row.every((cell, j) => cell === newErrors[i][j])
+      );
+      return isDifferent ? newErrors : prevErrors;
+    });
   }, [violations]);
 
   const isPrefilled = (row, col) => {
@@ -82,7 +127,7 @@ const SudokuBoard = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCell, disabled, isComplete]);
+  }, [selectedCell, disabled, isComplete]); // Added missing dependencies
 
   const renderNumberControls = () => {
     if (disabled || isComplete) return null;

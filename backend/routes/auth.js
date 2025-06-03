@@ -84,7 +84,7 @@ router.post('/register', [
 
         // Generate tokens
         const tokens = JWTUtils.generateTokens(user);
-
+        console.log('🔍 Generated tokens:', tokens); // Add this line
         res.status(201).json({
             message: 'User registered successfully',
             user: {
