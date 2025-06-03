@@ -1,0 +1,139 @@
+/* GameActions.css - Styles for game action buttons */
+
+.game-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 24px;
+    padding: 20px;
+    flex-wrap: wrap;
+  }
+  
+  .game-actions button {
+    min-width: 100px;
+    height: 44px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .game-actions button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.6s;
+  }
+  
+  .game-actions button:hover::before {
+    left: 100%;
+  }
+  
+  .hint-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+  }
+  
+  .hint-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+  }
+  
+  .solve-btn {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+  }
+  
+  .solve-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+  }
+  
+  .reset-btn {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    color: white;
+  }
+  
+  .reset-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(107, 114, 128, 0.4);
+  }
+  
+  .game-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  .game-actions button:disabled::before {
+    display: none;
+  }
+  
+  .game-actions button:active:not(:disabled) {
+    transform: translateY(0px) scale(0.98);
+  }
+  
+  /* Dark theme styles */
+  [data-theme="dark"] .game-actions button {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  [data-theme="dark"] .hint-btn:hover:not(:disabled) {
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.3);
+  }
+  
+  [data-theme="dark"] .solve-btn:hover:not(:disabled) {
+    box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
+  }
+  
+  [data-theme="dark"] .reset-btn:hover:not(:disabled) {
+    box-shadow: 0 8px 25px rgba(107, 114, 128, 0.3);
+  }
+  
+  /* Mobile responsive */
+  @media (max-width: 768px) {
+    .game-actions {
+      gap: 12px;
+      margin-top: 20px;
+      padding: 16px;
+    }
+    
+    .game-actions button {
+      min-width: 80px;
+      height: 40px;
+      font-size: 0.85rem;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .game-actions {
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+    
+    .game-actions button {
+      width: 100%;
+      max-width: 200px;
+    }
+  }
