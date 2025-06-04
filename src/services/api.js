@@ -41,6 +41,12 @@ class ApiService {
       
       console.log('🌐 API response status:', response.status, response.statusText);
       
+      // Handle 401 Unauthorized - session expired
+      if (response.status === 401) {
+        this.logout();
+        throw new Error('Session expired. Please log in again.');
+      }
+      
       const contentType = response.headers.get('content-type');
       let data = null;
       
@@ -95,7 +101,6 @@ class ApiService {
       this.token = response.accessToken;
       try {
         localStorage.setItem('token', response.accessToken);
-        localStorage.setItem('refreshToken', response.refreshToken);
       } catch (error) {
         console.warn('Could not save to localStorage:', error);
       }
@@ -107,7 +112,7 @@ class ApiService {
       username: response.user?.username,
       role: response.user?.role
     };
-}
+  }
 
   async login(username, password) {
     const response = await this.request('/api/auth/login', {
@@ -119,7 +124,6 @@ class ApiService {
       this.token = response.accessToken;
       try {
         localStorage.setItem('token', response.accessToken);
-        localStorage.setItem('refreshToken', response.refreshToken);
       } catch (error) {
         console.warn('Could not save to localStorage:', error);
       }
@@ -131,7 +135,7 @@ class ApiService {
       username: response.user?.username,
       role: response.user?.role
     };
-}
+  }
 
   async verifyToken() {
     if (!this.token) {
@@ -144,43 +148,10 @@ class ApiService {
     });
   }
 
-  async refreshToken() {
-    let refreshToken = null;
-    try {
-      refreshToken = localStorage.getItem('refreshToken');
-    } catch (error) {
-      console.warn('Could not access localStorage:', error);
-    }
-    
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    const response = await this.request('/api/auth/token/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken }),
-    });
-
-    if (response.accessToken) {
-      this.token = response.accessToken;
-      try {
-        localStorage.setItem('token', response.accessToken);
-        if (response.refreshToken) {
-          localStorage.setItem('refreshToken', response.refreshToken);
-        }
-      } catch (error) {
-        console.warn('Could not save to localStorage:', error);
-      }
-    }
-
-    return response;
-  }
-
   logout() {
     this.token = null;
     try {
       localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
     } catch (error) {
       console.warn('Could not clear localStorage:', error);
     }

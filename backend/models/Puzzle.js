@@ -1,9 +1,6 @@
 const db = require('../database/config');
 
 class Puzzle {
-    /**
-     * Create a new puzzle
-     */
     static async create(puzzleData) {
         const { difficulty, puzzle, solution, createdBy } = puzzleData;
         
@@ -27,9 +24,6 @@ class Puzzle {
         }
     }
 
-    /**
-     * Find puzzle by ID
-     */
     static async findById(id) {
         const query = `
             SELECT id, difficulty, puzzle, solution, created_by, created_at
@@ -55,9 +49,6 @@ class Puzzle {
         }
     }
 
-    /**
-     * Find all puzzles with pagination
-     */
     static async findAllPaginated(limit = 10, offset = 0) {
         const query = `
             SELECT id, difficulty, puzzle, solution, created_by, created_at
@@ -80,9 +71,6 @@ class Puzzle {
         }
     }
 
-    /**
-     * Find puzzles by difficulty with pagination
-     */
     static async findByDifficultyPaginated(difficulty, limit = 10, offset = 0) {
         const query = `
             SELECT id, difficulty, puzzle, solution, created_by, created_at
@@ -106,9 +94,7 @@ class Puzzle {
         }
     }
 
-    /**
-     * Count total puzzles
-     */
+
     static async count() {
         const query = 'SELECT COUNT(*) as count FROM puzzles';
         
@@ -121,9 +107,6 @@ class Puzzle {
         }
     }
 
-    /**
-     * Count puzzles by difficulty
-     */
     static async countByDifficulty(difficulty) {
         const query = 'SELECT COUNT(*) as count FROM puzzles WHERE difficulty = ?';
         
@@ -136,13 +119,9 @@ class Puzzle {
         }
     }
 
-    /**
-     * Update puzzle
-     */
     static async update(id, updateData) {
         const { difficulty, puzzle, solution } = updateData;
         
-        // Build dynamic query based on provided fields
         const updates = [];
         const params = [];
         
@@ -162,7 +141,7 @@ class Puzzle {
         }
         
         if (updates.length === 0) {
-            return true; // Nothing to update
+            return true;
         }
         
         updates.push('updated_at = datetime("now")');
@@ -183,9 +162,6 @@ class Puzzle {
         }
     }
 
-    /**
-     * Delete puzzle
-     */
     static async delete(id) {
         const query = 'DELETE FROM puzzles WHERE id = ?';
         
@@ -198,9 +174,6 @@ class Puzzle {
         }
     }
 
-    /**
-     * Find puzzles by user
-     */
     static async findByUser(userId, limit = 10, offset = 0) {
         const query = `
             SELECT id, difficulty, puzzle, solution, created_by, created_at
@@ -224,9 +197,6 @@ class Puzzle {
         }
     }
 
-    /**
-     * Count user's puzzles
-     */
     static async countByUser(userId) {
         const query = 'SELECT COUNT(*) as count FROM puzzles WHERE created_by = ?';
         

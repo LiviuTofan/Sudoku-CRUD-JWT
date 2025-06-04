@@ -74,7 +74,6 @@ router.post('/register', [
             });
         }
 
-        // ✅ FIXED: Use provided role or default to 'user'
         const userId = await User.create({ 
             username, 
             password, 
@@ -84,7 +83,7 @@ router.post('/register', [
 
         // Generate tokens
         const tokens = JWTUtils.generateTokens(user);
-        console.log('🔍 Generated tokens:', tokens); // Add this line
+        console.log('🔍 Generated tokens:', tokens);
         res.status(201).json({
             message: 'User registered successfully',
             user: {

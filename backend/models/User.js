@@ -1,6 +1,5 @@
-// models/User.js
 const bcrypt = require('bcrypt');
-const db = require('../database/config'); // ✅ FIXED: Changed from '../config/database'
+const db = require('../database/config');
 
 
 class User {
@@ -22,8 +21,6 @@ class User {
         // Hash password
         const saltRounds = 12;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
-        
-        // ✅ FIXED: Changed NOW() to datetime('now') for SQLite
         const query = 'INSERT INTO users (username, password, role, created_at) VALUES (?, ?, ?, datetime(\'now\'))';
         const [result] = await db.execute(query, [username, hashedPassword, role]);
         
@@ -56,8 +53,7 @@ class User {
         if (updates.length === 0) {
             throw new Error('No fields to update');
         }
-
-        // ✅ FIXED: Changed NOW() to datetime('now') for SQLite
+        
         updates.push('updated_at = datetime(\'now\')');
         values.push(id);
 

@@ -70,7 +70,6 @@ class Database {
         });
     }
 
-    // 🔥 ADD THIS METHOD - This is what your User.js needs!
     execute(sql, params = []) {
         return new Promise((resolve, reject) => {
             // Handle SELECT queries (return rows)
@@ -79,7 +78,6 @@ class Database {
                     if (err) {
                         reject(err);
                     } else {
-                        // Return in MySQL format: [rows, metadata]
                         resolve([rows, { affectedRows: 0 }]);
                     }
                 });
@@ -89,7 +87,6 @@ class Database {
                     if (err) {
                         reject(err);
                     } else {
-                        // Return in MySQL format: [result, metadata]
                         resolve([{
                             insertId: this.lastID,
                             affectedRows: this.changes

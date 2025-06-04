@@ -1,9 +1,7 @@
-// Updated initDatabase.js - Fix the schema to include updated_at
 const db = require('../database/config');
 
 async function initDatabase() {
     try {
-        // Don't connect here if already connected (for tests)
         if (!db.db) {
             await db.connect();
         }
@@ -19,7 +17,7 @@ async function initDatabase() {
             )
         `);
 
-        // Create puzzles table WITH updated_at column
+        // Create puzzles table
         await db.run(`
             CREATE TABLE IF NOT EXISTS puzzles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,20 +31,16 @@ async function initDatabase() {
             )
         `);
 
-        // Check if updated_at column exists (for existing databases)
         const tableInfo = await db.all(`PRAGMA table_info(puzzles)`);
         const hasUpdatedAt = tableInfo.some(column => column.name === 'updated_at');
         
         if (!hasUpdatedAt) {
             console.log('🔄 Adding missing updated_at column...');
             await db.run(`ALTER TABLE puzzles ADD COLUMN updated_at TEXT DEFAULT NULL`);
-            
-            // Update existing records
             await db.run(`UPDATE puzzles SET updated_at = created_at WHERE updated_at IS NULL`);
-            console.log('✅ updated_at column added successfully');
         }
 
-        // Create indexes for better performance
+        // Create indexes
         await db.run('CREATE INDEX IF NOT EXISTS idx_puzzles_difficulty ON puzzles(difficulty)');
         await db.run('CREATE INDEX IF NOT EXISTS idx_puzzles_created_at ON puzzles(created_at)');
         await db.run('CREATE INDEX IF NOT EXISTS idx_puzzles_updated_at ON puzzles(updated_at)');
@@ -55,9 +49,7 @@ async function initDatabase() {
         console.log('Database initialized successfully!');
         console.log('Tables created: users, puzzles (with updated_at column)');
         
-        // Log current table structure
-        const finalTableInfo = await db.all(`PRAGMA table_info(puzzles)`);
-        console.log('📋 Puzzles table structure:');
+        const finalTableInfo = await db.all(`PRAGMA table_info(puzzles)`);;
         finalTableInfo.forEach(column => {
             console.log(`  - ${column.name}: ${column.type}`);
         });
@@ -70,15 +62,14 @@ async function initDatabase() {
     }
 }
 
-// Run if called directly
 if (require.main === module) {
     initDatabase()
         .then(() => {
-            console.log('🎉 Database initialization completed');
+            console.log('Database initialization completed');
             process.exit(0);
         })
         .catch((error) => {
-            console.error('💥 Database initialization failed:', error);
+            console.error('Database initialization failed:', error);
             process.exit(1);
         });
 }

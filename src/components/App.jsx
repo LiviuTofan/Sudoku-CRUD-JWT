@@ -49,43 +49,40 @@ function App() {
     const checkAuth = async () => {
       if (apiService.isAuthenticated()) {
         try {
+          console.log('🔐 Checking authentication...')
           const verifyResponse = await apiService.verifyToken()
+          
           if (verifyResponse.valid) {
+            console.log('✅ Token is valid')
             const userData = {
               id: verifyResponse.decoded.id,
               username: verifyResponse.decoded.username,
               role: verifyResponse.decoded.role
             }
             setUser(userData)
-            console.log('User authenticated:', userData)
+            
+            // Check token expiration time
+            if (verifyResponse.decoded.exp) {
+              const expTime = verifyResponse.decoded.exp * 1000
+              const now = Date.now()
+              const timeLeft = expTime - now
+              
+              console.log(`⏰ Token expires in: ${Math.round(timeLeft / 1000)} seconds`)
+            }
             
             await loadUserPuzzles()
           } else {
+            console.log('❌ Token verification failed')
             apiService.logout()
           }
         } catch (error) {
-          console.error('Auth check failed:', error)
-          try {
-            await apiService.refreshToken()
-            const verifyResponse = await apiService.verifyToken()
-            if (verifyResponse.valid) {
-              const userData = {
-                id: verifyResponse.decoded.id,
-                username: verifyResponse.decoded.username,
-                role: verifyResponse.decoded.role
-              }
-              setUser(userData)
-              console.log('User authenticated after refresh:', userData)
-              await loadUserPuzzles()
-            } else {
-              apiService.logout()
-            }
-          } catch (refreshError) {
-            console.error('Token refresh failed:', refreshError)
+          console.log('❌ Authentication error:', error.message)
+          if (error.message.includes('Session expired')) {
             apiService.logout()
+            setError('Your session has expired. Please log in again.')
           }
         }
-      }
+      } 
       setLoading(false)
     }
 
@@ -100,7 +97,7 @@ function App() {
 
   // Handle successful events  
   const handleAuthSuccess = (authData) => {
-    console.log('Login successful:', {
+    console.log('✅ Login successful:', {
       username: authData.user.username,
       role: authData.user.role,
       token: authData.token ? 'present' : 'missing'
@@ -111,7 +108,7 @@ function App() {
   }
 
   const handleLogout = () => {
-    console.log('User logout')
+    console.log('👋 User logout')
     apiService.logout()
     setUser(null)
     clearPuzzleData()
@@ -290,7 +287,7 @@ function App() {
             <div>Complete: {gameStats.isComplete ? 'Yes' : 'No'}</div>
             <div>Progress: {gameStats.progress}% ({gameStats.correctCells}/81)</div>
             <div>Hint Cells: {hintCells.size} active</div>
-            </div> 
+          </div> 
         )}
 
         {gameStats && puzzle && (

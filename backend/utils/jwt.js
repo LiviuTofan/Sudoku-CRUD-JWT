@@ -1,6 +1,3 @@
-// ============================================
-// config/permissions.js - SIMPLIFIED
-// ============================================
 const ROLES = {
     ADMIN: 'admin',
     USER: 'user',
@@ -13,7 +10,6 @@ const PERMISSIONS = {
     DELETE: 'delete'
 };
 
-// Simple role-permission mapping
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: [PERMISSIONS.READ, PERMISSIONS.WRITE, PERMISSIONS.DELETE],
     [ROLES.USER]: [PERMISSIONS.READ, PERMISSIONS.WRITE],
@@ -38,9 +34,6 @@ module.exports = {
     PermissionManager
 };
 
-// ============================================
-// utils/jwt.js - SIMPLIFIED
-// ============================================
 const jwt = require('jsonwebtoken');
 
 class JWTUtils {
@@ -52,12 +45,12 @@ class JWTUtils {
                 role: user.role
             },
             process.env.JWT_SECRET || 'your-secret-key',
-            { expiresIn: '24h' } // Simple: 24 hours
+            { expiresIn: '1m' }
         );
 
         return {
             accessToken,
-            expiresIn: 86400 // 24 hours in seconds
+            expiresIn: 60
         };
     }
 

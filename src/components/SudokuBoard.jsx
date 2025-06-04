@@ -40,13 +40,11 @@ const SudokuBoard = ({
   const [selectedCell, setSelectedCell] = useState(null);
   const [errors, setErrors] = useState(Array(9).fill().map(() => Array(9).fill(false)));
 
-  // Use deep comparison for puzzle updates - FIXED: Added proper dependency handling
   useDeepCompareEffect(() => {
     if (puzzle && Array.isArray(puzzle)) {
       const newBoard = puzzle.map(row => [...row]);
       const newErrors = Array(9).fill().map(() => Array(9).fill(false));
       
-      // Only update if actually different to prevent loops
       setBoard(prevBoard => {
         const isDifferent = !prevBoard.every((row, i) => 
           row.every((cell, j) => cell === newBoard[i][j])
@@ -63,7 +61,6 @@ const SudokuBoard = ({
     }
   }, [puzzle]);
 
-  // Update errors based on violations
   useEffect(() => {
     const newErrors = Array(9).fill().map(() => Array(9).fill(false));
     violations.forEach(violation => {
@@ -72,7 +69,6 @@ const SudokuBoard = ({
       }
     });
     
-    // Only update if different
     setErrors(prevErrors => {
       const isDifferent = !prevErrors.every((row, i) => 
         row.every((cell, j) => cell === newErrors[i][j])
@@ -127,7 +123,7 @@ const SudokuBoard = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedCell, disabled, isComplete]); // Added missing dependencies
+  }, [selectedCell, disabled, isComplete]);
 
   const renderNumberControls = () => {
     if (disabled || isComplete) return null;
@@ -170,7 +166,6 @@ const SudokuBoard = ({
                 const isThickBottomBorder = rowIndex % 3 === 2 && rowIndex < 8;
                 const isThickRightBorder = colIndex % 3 === 2 && colIndex < 8;
                 
-                // Build CSS classes
                 let cssClasses = 'sudoku-cell';
                 
                 if (isSelected) cssClasses += ' selected';
@@ -178,7 +173,6 @@ const SudokuBoard = ({
                 if (isThickRightBorder) cssClasses += ' thick-right-border';
                 if (disabled || isComplete) cssClasses += ' disabled';
                 
-                // Cell type classes (mutually exclusive)
                 if (isPrefilledCell) {
                   cssClasses += ' prefilled';
                 } else if (cell !== 0) {
