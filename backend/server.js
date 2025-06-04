@@ -9,17 +9,14 @@ require('dotenv').config();
 const db = require('./database/config');
 const errorHandler = require('./middleware/errorHandler');
 
-// Import routes
 const authRoutes = require('./routes/auth');
-const puzzleRoutes = require('./routes/puzzles'); // Add this line
-
+const puzzleRoutes = require('./routes/puzzles');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Rate limiting
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: 'Too many requests from this IP, please try again later.'
 });
 
@@ -61,7 +58,6 @@ const swaggerOptions = {
 const specs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
-// Health check endpoint
 /**
  * @swagger
  * /health:
@@ -79,9 +75,8 @@ app.get('/health', (req, res) => {
     });
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);        // Changed from '/auth' to '/api/auth'
-app.use('/api/puzzles', puzzleRoutes);   // Add this line
+app.use('/api/auth', authRoutes);
+app.use('/api/puzzles', puzzleRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -92,12 +87,11 @@ app.get('/', (req, res) => {
         endpoints: {
             health: '/health',
             auth: '/api/auth',
-            puzzles: '/api/puzzles',    // Add this line
+            puzzles: '/api/puzzles',
         }
     });
 });
 
-// Error handling middleware (must be last)
 app.use(errorHandler);
 
 // 404 handler
@@ -113,8 +107,6 @@ app.use('*', (req, res) => {
 async function startServer() {
     try {
         await db.connect();
-        
-        // Initialize database tables
         const initDatabase = require('./scripts/initDatabase');
         await initDatabase();
         
@@ -131,9 +123,8 @@ async function startServer() {
     }
 }
 
-// Graceful shutdown
 process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down server...');
+    console.log('\n Shutting down server...');
     db.close();
     process.exit(0);
 });

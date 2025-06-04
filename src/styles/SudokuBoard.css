@@ -1,213 +1,193 @@
-.confetti-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 1000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
+/* SudokuBoard.css */
 
-.confetti {
-  position: absolute;
-  width: 10px;
-  height: 16px;
-  top: -10%;
-  opacity: 0;
-  animation: confetti-fall 5s ease-in-out forwards;
-}
-
-@keyframes confetti-fall {
-  0% {
-    transform: translateY(0) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(100vh) rotate(720deg);
-    opacity: 0;
-  }
-}
-
-.celebration-message {
-  background-color: rgba(255, 255, 255, 0.9);
-  padding: 20px 40px;
-  border-radius: 10px;
-  text-align: center;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-  animation: message-popup 0.5s ease-out forwards;
-  z-index: 1001;
-}
-
-@keyframes message-popup {
-  0% {
-    transform: scale(0.5);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.celebration-message h2 {
-  color: #4CAF50;
-  margin-bottom: 10px;
-  font-size: 2rem;
-}
-
-.celebration-message p {
-  color: #333;
-  font-size: 1.2rem;
-  margin: 0;
-}
-
-header h1 {
-  margin: 0;
-  color: #000000 !important;
-}
-
+/* Container styles */
 .sudoku-container {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 20px;
-  position: relative;
-  z-index: 1;
+  gap: 20px;
+  padding: 20px;
 }
 
+.board-container {
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Sudoku board styles */
 .sudoku-board {
   display: grid;
   grid-template-rows: repeat(9, 1fr);
-  border: 2px solid var(--border-color);
-  background-color: var(--board-bg);
-  width: 360px;
-  height: 360px;
+  gap: 1px;
+  background-color: #333;
+  border: 3px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .board-row {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
+  gap: 1px;
 }
 
-.board-cell {
+/* Cell base styles */
+.sudoku-cell {
+  width: 45px;
+  height: 45px;
+  background-color: #fff;
   display: flex;
+  align-items: center;
   justify-content: center;
-  align-items: center;
-  font-size: 1.5rem;
-  width: 40px;
-  height: 40px;
-  background-color: var(--cell-bg);
-  border: 1px solid var(--border-color);
-  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  border: none;
+  transition: all 0.2s ease;
   user-select: none;
-  transition: background-color 0.2s, color 0.2s;
+  cursor: pointer;
 }
 
-.board-cell.prefilled {
-  background-color: var(--prefilled-bg);
-  font-weight: bold;
-  cursor: not-allowed;
+.sudoku-cell:hover {
+  background-color: #f5f5f5;
 }
 
-.board-cell.selected {
-  background-color: var(--highlight-color);
-  color: white;
+/* Cell state modifiers */
+.sudoku-cell.selected {
+  background-color: #e3f2fd !important;
+  border: 2px solid #2196F3 !important;
+  box-shadow: 0 0 8px rgba(33, 150, 243, 0.4) !important;
 }
 
-.board-cell.error {
-  color: var(--error-color);
-  font-weight: bold;
+.sudoku-cell.disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
-.board-cell.border-bottom {
-  border-bottom: 2px solid var(--border-color);
+.sudoku-cell.disabled:hover {
+  background-color: #fff;
 }
 
-.board-cell.border-right {
-  border-right: 2px solid var(--border-color);
+/* Border modifiers */
+.sudoku-cell.thick-bottom-border {
+  border-bottom: 3px solid #333;
 }
 
-.board-cell.solution-view {
-  color: var(--text-color);
-  cursor: not-allowed;
+.sudoku-cell.thick-right-border {
+  border-right: 3px solid #333;
 }
 
-.board-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  margin-top: 20px;
+/* Cell type styles */
+.sudoku-cell.prefilled {
+  background-color: #f5f5f5 !important;
+  color: #000 !important;
+  font-weight: 900 !important;
+  cursor: default;
 }
 
+.sudoku-cell.correct {
+  background-color: #fff !important;
+  color: #4CAF50 !important;
+  font-weight: bold !important;
+}
+
+.sudoku-cell.wrong {
+  background-color: #fff !important;
+  color: #f44336 !important;
+  font-weight: bold !important;
+}
+
+.sudoku-cell.hint {
+  background-color: #fff !important;
+  color: #FF9800 !important;
+  font-weight: 900 !important;
+  text-shadow: 0 0 2px rgba(255, 152, 0, 0.3);
+}
+
+.sudoku-cell.hint.selected {
+  border: 2px solid #FF9800 !important;
+  box-shadow: 0 0 8px rgba(255, 152, 0, 0.4) !important;
+}
+
+/* Number controls */
 .number-controls {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 5px;
-  margin-bottom: 15px;
-  width: 300px;
+  gap: 8px;
+  padding: 15px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .number-button {
-  padding: 10px;
-  font-size: 1.2rem;
-  background-color: var(--btn-bg);
-  color: var(--btn-text);
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.number-button:hover {
-  background-color: var(--btn-hover);
-}
-
-.backspace-button {
-  font-size: 1.5rem;
-}
-
-.steps-counter {
-  margin: 10px 0;
-  font-size: 1.1rem;
+  padding: 12px;
+  fontSize: 16px;
   font-weight: bold;
-  color: #000000 !important;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 50px;
+}
+
+.number-button:hover:not(:disabled) {
+  background-color: #1976D2;
+  transform: translateY(-1px);
+}
+
+.number-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.number-button.clear-button {
+  background-color: #ff5722;
+}
+
+.number-button.clear-button:hover:not(:disabled) {
+  background-color: #e64a19;
+}
+
+/* Completion message */
+.completion-message {
+  font-size: 24px;
+  font-weight: bold;
+  color: #4CAF50;
+  text-align: center;
+  padding: 20px;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  animation: pulse 2s infinite;
+}
+
+/* Hint debug info */
+.hint-debug {
+  font-size: 12px;
+  color: #666;
+  font-family: monospace;
+  background-color: rgba(255, 255, 255, 0.8);
   padding: 5px 10px;
   border-radius: 5px;
-  background-color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme='dark'] .steps-counter {
-  background-color: rgba(255, 255, 255, 0.7); /* Light background even in dark mode */
-}
-
-.solution-button {
-  padding: 10px 20px;
-  font-size: 1rem;
-  background-color: var(--btn-bg);
-  color: var(--btn-text);
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.2s;
   margin-top: 10px;
 }
 
-.solution-button:hover {
-  background-color: var(--btn-hover);
+/* Animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
-
-.solution-button.showing-solution {
-  background-color: var(--error-color);
-}
-
-.solution-button.showing-solution:hover {
-  background-color: #c82333;
-}
-
-/* Add this to your CSS file for the hint pulse animation */
 
 @keyframes hint-pulse {
   0% {
@@ -227,11 +207,128 @@ header h1 {
   }
 }
 
-/* Alternative: If you want to use CSS classes instead of inline styles */
-.hint-cell-alternative {
-  background-color: #ffeb3b !important;
-  color: #333 !important;
-  font-weight: bold !important;
-  animation: hint-pulse 0.5s ease-in-out;
-  box-shadow: 0 0 10px rgba(255, 235, 59, 0.7) !important;
+/* Dark theme styles */
+[data-theme="dark"] .board-container {
+  background-color: rgba(30, 30, 30, 0.9);
+}
+
+[data-theme="dark"] .sudoku-board {
+  background-color: #1f2937;
+  border-color: #1f2937;
+}
+
+[data-theme="dark"] .sudoku-cell {
+  background-color: #374151;
+  color: #f9fafb;
+  border-color: #1f2937;
+}
+
+[data-theme="dark"] .sudoku-cell:hover {
+  background-color: #4b5563;
+}
+
+[data-theme="dark"] .sudoku-cell.selected {
+  background-color: #1e3a8a !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4) !important;
+}
+
+[data-theme="dark"] .sudoku-cell.prefilled {
+  background-color: #4b5563 !important;
+  color: #f9fafb !important;
+}
+
+[data-theme="dark"] .sudoku-cell.correct {
+  background-color: #374151 !important;
+  color: #10b981 !important;
+}
+
+[data-theme="dark"] .sudoku-cell.wrong {
+  background-color: #374151 !important;
+  color: #ef4444 !important;
+}
+
+[data-theme="dark"] .sudoku-cell.hint {
+  background-color: #374151 !important;
+  color: #fbbf24 !important;
+}
+
+[data-theme="dark"] .sudoku-cell.hint.selected {
+  border-color: #fbbf24 !important;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.4) !important;
+}
+
+/* Dark theme number controls - This is the key fix! */
+[data-theme="dark"] .number-controls {
+  background-color: rgba(30, 30, 30, 0.9) !important;
+}
+
+[data-theme="dark"] .number-button {
+  background-color: #4b5563 !important;
+  color: #f9fafb !important;
+  border: 1px solid #6b7280;
+}
+
+[data-theme="dark"] .number-button:hover:not(:disabled) {
+  background-color: #374151 !important;
+  border-color: #9ca3af;
+}
+
+[data-theme="dark"] .number-button.clear-button {
+  background-color: #dc2626 !important;
+  color: #f9fafb !important;
+}
+
+[data-theme="dark"] .number-button.clear-button:hover:not(:disabled) {
+  background-color: #b91c1c !important;
+}
+
+[data-theme="dark"] .completion-message {
+  background-color: rgba(30, 30, 30, 0.95);
+  color: #10b981;
+}
+
+[data-theme="dark"] .hint-debug {
+  background-color: rgba(30, 30, 30, 0.8);
+  color: #d1d5db;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .sudoku-cell {
+    width: 35px;
+    height: 35px;
+    font-size: 16px;
+  }
+  
+  .number-controls {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+    padding: 12px;
+  }
+  
+  .number-button {
+    padding: 10px;
+    font-size: 14px;
+    min-width: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .sudoku-cell {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+  
+  .number-button {
+    padding: 8px;
+    font-size: 12px;
+    min-width: 35px;
+  }
+  
+  .completion-message {
+    font-size: 18px;
+    padding: 15px;
+  }
 }

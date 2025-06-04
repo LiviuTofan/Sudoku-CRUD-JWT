@@ -1,107 +1,85 @@
-const express = require('express');
-const User = require('../models/User');
-const JWTUtils = require('../utils/jwt');
-const { authenticateToken } = require('../middleware/auth');
-const { validateRegister, validateLogin, handleValidation } = require('../middleware/validation');
+const bcrypt = require('bcrypt');
+const db = require('../database/config');
 
-const router = express.Router();
 
-// Register
-router.post('/register', validateRegister, handleValidation, async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        // Check if user exists
-        const existingUser = await User.findByUsername(username);
-        if (existingUser) {
-            return res.status(409).json({ error: 'Username already exists' });
-        }
-
-        // Create user
-        const userId = await User.create({ username, password, role: 'user' });
-        const user = await User.findById(userId);
-
-        // Generate token
-        const tokens = JWTUtils.generateTokens(user);
-
-        res.status(201).json({
-            message: 'User registered successfully',
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role
-            },
-            ...tokens
-        });
-
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Registration failed' });
+class User {
+    static async findByUsername(username) {
+        const query = 'SELECT * FROM users WHERE username = ?';
+        const [rows] = await db.execute(query, [username]);
+        return rows.length > 0 ? rows[0] : null;
     }
-});
 
-// Login
-router.post('/login', validateLogin, handleValidation, async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        // Find user
-        const user = await User.findByUsername(username);
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        // Check password
-        const isValidPassword = await User.validatePassword(password, user.password);
-        if (!isValidPassword) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        // Generate token
-        const tokens = JWTUtils.generateTokens(user);
-
-        res.json({
-            message: 'Login successful',
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role
-            },
-            ...tokens
-        });
-
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Login failed' });
+    static async findById(id) {
+        const query = 'SELECT * FROM users WHERE id = ?';
+        const [rows] = await db.execute(query, [id]);
+        return rows.length > 0 ? rows[0] : null;
     }
-});
 
-// Verify token
-router.post('/token/verify', (req, res) => {
-    try {
-        const { token } = req.body;
+    static async create(userData) {
+        const { username, password, role = 'user' } = userData;
         
-        if (!token) {
-            return res.status(400).json({ error: 'Token is required' });
+        // Hash password
+        const saltRounds = 12;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+        const query = 'INSERT INTO users (username, password, role, created_at) VALUES (?, ?, ?, datetime(\'now\'))';
+        const [result] = await db.execute(query, [username, hashedPassword, role]);
+        
+        return result.insertId;
+    }
+
+    static async validatePassword(plainPassword, hashedPassword) {
+        return await bcrypt.compare(plainPassword, hashedPassword);
+    }
+
+    static async updateById(id, userData) {
+        const { username, password, role } = userData;
+        const updates = [];
+        const values = [];
+
+        if (username) {
+            updates.push('username = ?');
+            values.push(username);
+        }
+        if (password) {
+            const hashedPassword = await bcrypt.hash(password, 12);
+            updates.push('password = ?');
+            values.push(hashedPassword);
+        }
+        if (role) {
+            updates.push('role = ?');
+            values.push(role);
         }
 
-        const decoded = JWTUtils.verify(token);
+        if (updates.length === 0) {
+            throw new Error('No fields to update');
+        }
         
-        res.json({
-            valid: true,
-            decoded: {
-                id: decoded.id,
-                username: decoded.username,
-                role: decoded.role
-            }
-        });
+        updates.push('updated_at = datetime(\'now\')');
+        values.push(id);
 
-    } catch (error) {
-        res.status(401).json({ 
-            valid: false,
-            error: 'Invalid token'
-        });
+        const query = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+        const [result] = await db.execute(query, values);
+        
+        return result.affectedRows > 0;
     }
-});
 
-module.exports = router;
+    static async deleteById(id) {
+        const query = 'DELETE FROM users WHERE id = ?';
+        const [result] = await db.execute(query, [id]);
+        return result.affectedRows > 0;
+    }
+
+    static async getAll(limit = 50, offset = 0) {
+        const query = 'SELECT id, username, role, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?';
+        const [rows] = await db.execute(query, [limit, offset]);
+        return rows;
+    }
+
+    static async count() {
+        const query = 'SELECT COUNT(*) as total FROM users';
+        const [rows] = await db.execute(query);
+        return rows[0].total;
+    }
+}
+
+module.exports = User;

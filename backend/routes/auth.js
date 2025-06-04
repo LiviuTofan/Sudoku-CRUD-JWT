@@ -28,6 +28,10 @@ const router = express.Router();
  *               password:
  *                 type: string
  *                 minLength: 6
+ *               role:
+ *                 type: string
+ *                 enum: [user, admin]
+ *                 default: user
  *     responses:
  *       201:
  *         description: User registered successfully
@@ -44,7 +48,11 @@ router.post('/register', [
         .withMessage('Username must contain only letters and numbers'),
     body('password')
         .isLength({ min: 6 })
-        .withMessage('Password must be at least 6 characters long')
+        .withMessage('Password must be at least 6 characters long'),
+    body('role')
+        .optional()
+        .isIn(['visitor', 'user', 'admin'])
+        .withMessage('Role must be either "visitor", "user" or "admin"')
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -55,7 +63,7 @@ router.post('/register', [
             });
         }
 
-        const { username, password } = req.body;
+        const { username, password, role } = req.body;
 
         // Check if user already exists
         const existingUser = await User.findByUsername(username);
@@ -66,13 +74,16 @@ router.post('/register', [
             });
         }
 
-        // Create new user
-        const userId = await User.create({ username, password, role: 'user' });
+        const userId = await User.create({ 
+            username, 
+            password, 
+            role: role || 'user' 
+        });
         const user = await User.findById(userId);
 
         // Generate tokens
         const tokens = JWTUtils.generateTokens(user);
-
+        console.log('🔍 Generated tokens:', tokens);
         res.status(201).json({
             message: 'User registered successfully',
             user: {

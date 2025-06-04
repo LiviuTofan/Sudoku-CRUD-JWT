@@ -1,4 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import '../styles/SudokuBoard.css';
+
+const useDeepCompareEffect = (callback, dependencies) => {
+  const ref = useRef();
+  const signalRef = useRef(0);
+  
+  // Deep equality check for 2D arrays
+  const deepEqual = (a, b) => {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    if (!Array.isArray(a) || !Array.isArray(b)) return a === b;
+    if (a.length !== b.length) return false;
+    return a.every((row, i) => {
+      if (!Array.isArray(row) || !Array.isArray(b[i])) return row === b[i];
+      if (row.length !== b[i].length) return false;
+      return row.every((cell, j) => cell === b[i][j]);
+    });
+  };
+  
+  if (!ref.current || !deepEqual(dependencies[0], ref.current[0])) {
+    ref.current = dependencies;
+    signalRef.current += 1;
+  }
+  
+  useEffect(callback, [signalRef.current]);
+};
 
 const SudokuBoard = ({ 
   puzzle, 
@@ -14,17 +40,27 @@ const SudokuBoard = ({
   const [selectedCell, setSelectedCell] = useState(null);
   const [errors, setErrors] = useState(Array(9).fill().map(() => Array(9).fill(false)));
 
-  // Initialize board when puzzle changes
-  useEffect(() => {
-    console.log('SudokuBoard: puzzle prop changed:', puzzle);
-    if (puzzle) {
-      setBoard(puzzle.map(row => [...row]));
-      // Reset errors when new puzzle loads
-      setErrors(Array(9).fill().map(() => Array(9).fill(false)));
+  useDeepCompareEffect(() => {
+    if (puzzle && Array.isArray(puzzle)) {
+      const newBoard = puzzle.map(row => [...row]);
+      const newErrors = Array(9).fill().map(() => Array(9).fill(false));
+      
+      setBoard(prevBoard => {
+        const isDifferent = !prevBoard.every((row, i) => 
+          row.every((cell, j) => cell === newBoard[i][j])
+        );
+        return isDifferent ? newBoard : prevBoard;
+      });
+      
+      setErrors(prevErrors => {
+        const isDifferent = !prevErrors.every((row, i) => 
+          row.every((cell, j) => cell === newErrors[i][j])
+        );
+        return isDifferent ? newErrors : prevErrors;
+      });
     }
   }, [puzzle]);
 
-  // Update errors based on violations
   useEffect(() => {
     const newErrors = Array(9).fill().map(() => Array(9).fill(false));
     violations.forEach(violation => {
@@ -32,7 +68,13 @@ const SudokuBoard = ({
         newErrors[violation.row][violation.col] = true;
       }
     });
-    setErrors(newErrors);
+    
+    setErrors(prevErrors => {
+      const isDifferent = !prevErrors.every((row, i) => 
+        row.every((cell, j) => cell === newErrors[i][j])
+      );
+      return isDifferent ? newErrors : prevErrors;
+    });
   }, [violations]);
 
   const isPrefilled = (row, col) => {
@@ -87,12 +129,12 @@ const SudokuBoard = ({
     if (disabled || isComplete) return null;
     
     return (
-      <div style={styles.numberControls}>
+      <div className="number-controls">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
           <button 
             key={num} 
             onClick={() => handleNumberInput(num)}
-            style={styles.numberButton}
+            className="number-button"
             disabled={!selectedCell}
           >
             {num}
@@ -100,7 +142,7 @@ const SudokuBoard = ({
         ))}
         <button 
           onClick={() => handleNumberInput(0)}
-          style={{...styles.numberButton, ...styles.clearButton}}
+          className="number-button clear-button"
           disabled={!selectedCell}
         >
           Clear
@@ -110,11 +152,11 @@ const SudokuBoard = ({
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.boardContainer}>
-        <div style={styles.board}>
+    <div className="sudoku-container">
+      <div className="board-container">
+        <div className="sudoku-board">
           {board.map((row, rowIndex) => (
-            <div key={rowIndex} style={styles.row}>
+            <div key={rowIndex} className="board-row">
               {row.map((cell, colIndex) => {
                 const isSelected = selectedCell && selectedCell.row === rowIndex && selectedCell.col === colIndex;
                 const isPrefilledCell = isPrefilled(rowIndex, colIndex);
@@ -124,33 +166,23 @@ const SudokuBoard = ({
                 const isThickBottomBorder = rowIndex % 3 === 2 && rowIndex < 8;
                 const isThickRightBorder = colIndex % 3 === 2 && colIndex < 8;
                 
-                // Build base cell style
-                let cellStyle = { ...styles.cell };
-                
-                if (isThickBottomBorder) cellStyle = { ...cellStyle, ...styles.thickBottomBorder };
-                if (isThickRightBorder) cellStyle = { ...cellStyle, ...styles.thickRightBorder };
-                if (disabled || isComplete) cellStyle = { ...cellStyle, ...styles.disabledCell };
-                
-                cellStyle.cursor = (!isPrefilledCell && !disabled && !isComplete) ? 'pointer' : 'default';
-                
-                // Build CSS classes for better style control
                 let cssClasses = 'sudoku-cell';
                 
-                if (isSelected) {
-                  cssClasses += ' selected-cell';
-                }
+                if (isSelected) cssClasses += ' selected';
+                if (isThickBottomBorder) cssClasses += ' thick-bottom-border';
+                if (isThickRightBorder) cssClasses += ' thick-right-border';
+                if (disabled || isComplete) cssClasses += ' disabled';
                 
-                // Cell type classes (mutually exclusive)
                 if (isPrefilledCell) {
-                  cssClasses += ' prefilled-cell';
+                  cssClasses += ' prefilled';
                 } else if (cell !== 0) {
                   // User-entered number
                   if (isHint) {
-                    cssClasses += ' hint-number-cell';
+                    cssClasses += ' hint';
                   } else if (hasError || !isCorrect) {
-                    cssClasses += ' wrong-number-cell';
+                    cssClasses += ' wrong';
                   } else if (isCorrect) {
-                    cssClasses += ' correct-number-cell';
+                    cssClasses += ' correct';
                   }
                 }
                 
@@ -158,7 +190,6 @@ const SudokuBoard = ({
                   <div 
                     key={colIndex} 
                     className={cssClasses}
-                    style={cellStyle}
                     onClick={() => handleCellClick(rowIndex, colIndex)}
                   >
                     {cell !== 0 ? cell : ''}
@@ -174,170 +205,18 @@ const SudokuBoard = ({
       
       {/* Debug info for active hints */}
       {hintCells.size > 0 && (
-        <div style={styles.hintDebug}>
+        <div className="hint-debug">
           💡 Active hints: {Array.from(hintCells).join(', ')}
         </div>
       )}
       
       {isComplete && (
-        <div style={styles.completionMessage}>
+        <div className="completion-message">
           🎉 Congratulations! Puzzle completed! 🎉
         </div>
       )}
     </div>
   );
-};
-
-// Inject CSS styles for different cell types
-if (typeof document !== 'undefined' && !document.getElementById('sudoku-cell-styles')) {
-  const style = document.createElement('style');
-  style.id = 'sudoku-cell-styles';
-  style.textContent = `
-    .sudoku-cell {
-      background-color: #fff;
-      transition: all 0.2s ease;
-    }
-    
-    .sudoku-cell.selected-cell {
-      background-color: #e3f2fd !important;
-      border: 2px solid #2196F3 !important;
-      box-shadow: 0 0 8px rgba(33, 150, 243, 0.4) !important;
-    }
-    
-    /* Original puzzle numbers - black on white */
-    .sudoku-cell.prefilled-cell {
-      background-color: #f5f5f5 !important;
-      color: #000 !important;
-      font-weight: 900 !important;
-    }
-    
-    /* User-entered correct numbers - green */
-    .sudoku-cell.correct-number-cell {
-      background-color: #fff !important;
-      color: #4CAF50 !important;
-      font-weight: bold !important;
-    }
-    
-    /* User-entered wrong numbers - red */
-    .sudoku-cell.wrong-number-cell {
-      background-color: #fff !important;
-      color: #f44336 !important;
-      font-weight: bold !important;
-    }
-    
-    /* Hint numbers - yellow on white */
-    .sudoku-cell.hint-number-cell {
-      background-color: #fff !important;
-      color: #FF9800 !important;
-      font-weight: 900 !important;
-      text-shadow: 0 0 2px rgba(255, 152, 0, 0.3);
-    }
-    
-    /* Selected hint cell gets special border */
-    .sudoku-cell.hint-number-cell.selected-cell {
-      border: 2px solid #FF9800 !important;
-      box-shadow: 0 0 8px rgba(255, 152, 0, 0.4) !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '20px',
-    padding: '20px',
-  },
-  boardContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    padding: '10px',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: '12px',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-  },
-  board: {
-    display: 'grid',
-    gridTemplateRows: 'repeat(9, 1fr)',
-    gap: '1px',
-    backgroundColor: '#333',
-    border: '3px solid #333',
-    borderRadius: '8px',
-    overflow: 'hidden',
-  },
-  row: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(9, 1fr)',
-    gap: '1px',
-  },
-  cell: {
-    width: '45px',
-    height: '45px',
-    backgroundColor: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '18px',
-    fontWeight: 'bold',
-    border: 'none',
-    transition: 'all 0.2s ease',
-    userSelect: 'none',
-  },
-  disabledCell: {
-    opacity: 0.6,
-  },
-  thickBottomBorder: {
-    borderBottom: '3px solid #333',
-  },
-  thickRightBorder: {
-    borderRight: '3px solid #333',
-  },
-  numberControls: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(5, 1fr)',
-    gap: '8px',
-    padding: '15px',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: '12px',
-    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)',
-  },
-  numberButton: {
-    padding: '12px',
-    fontSize: '16px',
-    fontWeight: 'bold',
-    backgroundColor: '#2196F3',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    minWidth: '50px',
-  },
-  clearButton: {
-    backgroundColor: '#ff5722',
-  },
-  completionMessage: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    textAlign: 'center',
-    padding: '20px',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: '12px',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-    animation: 'pulse 2s infinite',
-  },
-  hintDebug: {
-    fontSize: '12px',
-    color: '#666',
-    fontFamily: 'monospace',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    padding: '5px 10px',
-    borderRadius: '5px',
-    marginTop: '10px',
-  },
 };
 
 export default SudokuBoard;

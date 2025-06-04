@@ -2,41 +2,33 @@ const request = require('supertest');
 const db = require('../database/config');
 const initDatabase = require('../scripts/initDatabase');
 
-// Import app after database setup
 let app;
 let server;
 
 describe('Authentication Endpoints', () => {
     beforeAll(async () => {
-        // Increase timeout for setup
         jest.setTimeout(10000);
-        
         await db.connect();
-        
-        // Clear existing tables and recreate
+
         try {
             await db.run('DROP TABLE IF EXISTS users');
             await db.run('DROP TABLE IF EXISTS puzzles');
         } catch (err) {
-            // Tables might not exist, that's ok
             console.log('Tables did not exist, continuing...');
         }
         
         await initDatabase();
-        
-        // Import app after database is ready
+
         app = require('../server');
         
-        // Store server reference if it exists
         if (app && typeof app.listen === 'function') {
             server = app;
         } else if (app && app.server) {
             server = app.server;
         }
-    }, 15000); // 15 second timeout for beforeAll
+    }, 15000);
 
     afterAll(async () => {
-        // Close server first with proper error handling
         if (server) {
             try {
                 if (typeof server.close === 'function') {
@@ -57,12 +49,11 @@ describe('Authentication Endpoints', () => {
             }
         }
         
-        // Close database connection with timeout
         if (db && db.db) {
             try {
                 await new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
-                        resolve(); // Resolve instead of reject to avoid hanging
+                        resolve();
                     }, 2000);
                     
                     db.close((err) => {
@@ -78,9 +69,8 @@ describe('Authentication Endpoints', () => {
             }
         }
         
-        // Small delay to ensure cleanup
         await new Promise(resolve => setTimeout(resolve, 500));
-    }, 10000); // 10 second timeout for afterAll
+    }, 10000);
 
     describe('POST /auth/register', () => {
         test('Should register a new user successfully', async () => {
@@ -116,8 +106,8 @@ describe('Authentication Endpoints', () => {
 
         test('Should fail with invalid data', async () => {
             const userData = {
-                username: 'ab', // Too short
-                password: '123'  // Too short
+                username: 'ab',
+                password: '123'
             };
 
             const response = await request(app)

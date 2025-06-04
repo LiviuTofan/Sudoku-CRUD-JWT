@@ -69,6 +69,33 @@ class Database {
             });
         });
     }
+
+    execute(sql, params = []) {
+        return new Promise((resolve, reject) => {
+            // Handle SELECT queries (return rows)
+            if (sql.trim().toUpperCase().startsWith('SELECT')) {
+                this.db.all(sql, params, (err, rows) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve([rows, { affectedRows: 0 }]);
+                    }
+                });
+            } else {
+                // Handle INSERT/UPDATE/DELETE queries
+                this.db.run(sql, params, function(err) {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve([{
+                            insertId: this.lastID,
+                            affectedRows: this.changes
+                        }, {}]);
+                    }
+                });
+            }
+        });
+    }
 }
 
 module.exports = new Database();

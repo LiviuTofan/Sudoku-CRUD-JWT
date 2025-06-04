@@ -1,613 +1,146 @@
-// App.jsx - Fixed Version with Persistent Yellow Hint Highlighting
 import React, { useState, useEffect } from 'react'
 import SudokuBoard from './SudokuBoard'
 import DifficultySelector from './DifficultySelector'
 import Auth from './Auth'
+import usePuzzleManager from '../hooks/usePuzzleManager'
 import apiService from '../services/api'
 import '../styles/App.css'
-import backgroundImage from '../assets/bg.png';
+import '../styles/GameControls.css'
+import '../styles/GameActions.css'
+import backgroundImage from '../assets/bg.png'
 
 function App() {
+  // State for user authentication and app state
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [difficulty, setDifficulty] = useState('medium')
-  const [puzzle, setPuzzle] = useState(null)
-  const [solution, setSolution] = useState(null)
-  const [currentPuzzleId, setCurrentPuzzleId] = useState(null)
-  const [userProgress, setUserProgress] = useState(null)
-  const [originalPuzzle, setOriginalPuzzle] = useState(null)
-  
-  // FIXED: Add hint cells tracking (removed auto-removal timer)
-  const [hintCells, setHintCells] = useState(new Set())
-  
+  const [error, setError] = useState('')
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem('sudokuTheme')
     return savedTheme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
   })
-  const [error, setError] = useState('')
-  const [generatingPuzzle, setGeneratingPuzzle] = useState(false)
-  const [gameStats, setGameStats] = useState({
-    isComplete: false,
-    correctCells: 0,
-    progress: 0,
-    violations: []
-  })
 
+  const {
+    // State
+    difficulty,
+    puzzle,
+    solution,
+    currentPuzzleId,
+    userProgress,
+    originalPuzzle,
+    hintCells,
+    generatingPuzzle,
+    deleting,
+    gameStats,
+    
+    // Actions
+    loadUserPuzzles,
+    generateNewPuzzle,
+    handleCellChange,
+    getHint,
+    solvePuzzle,
+    resetPuzzle,
+    deletePuzzle,
+    handleDifficultyChange,
+    clearPuzzleData
+  } = usePuzzleManager(user, setError)
+
+  // Authentication check
   useEffect(() => {
     const checkAuth = async () => {
-      console.log('🔍 Starting auth check...')
       if (apiService.isAuthenticated()) {
         try {
+          console.log('🔐 Checking authentication...')
           const verifyResponse = await apiService.verifyToken()
-          console.log('✅ Token verification response:', verifyResponse)
+          
           if (verifyResponse.valid) {
-            setUser({
+            console.log('✅ Token is valid')
+            const userData = {
               id: verifyResponse.decoded.id,
               username: verifyResponse.decoded.username,
               role: verifyResponse.decoded.role
-            })
-            console.log('👤 User set:', verifyResponse.decoded.username)
+            }
+            setUser(userData)
+            
+            // Check token expiration time
+            if (verifyResponse.decoded.exp) {
+              const expTime = verifyResponse.decoded.exp * 1000
+              const now = Date.now()
+              const timeLeft = expTime - now
+              
+              console.log(`⏰ Token expires in: ${Math.round(timeLeft / 1000)} seconds`)
+            }
             
             await loadUserPuzzles()
           } else {
-            console.log('❌ Token invalid, logging out')
+            console.log('❌ Token verification failed')
             apiService.logout()
           }
         } catch (error) {
-          console.error('Auth check failed:', error)
-          try {
-            await apiService.refreshToken()
-            const verifyResponse = await apiService.verifyToken()
-            if (verifyResponse.valid) {
-              setUser({
-                id: verifyResponse.decoded.id,
-                username: verifyResponse.decoded.username,
-                role: verifyResponse.decoded.role
-              })
-              await loadUserPuzzles()
-            } else {
-              apiService.logout()
-            }
-          } catch (refreshError) {
-            console.error('Token refresh failed:', refreshError)
+          console.log('❌ Authentication error:', error.message)
+          if (error.message.includes('Session expired')) {
             apiService.logout()
+            setError('Your session has expired. Please log in again.')
           }
         }
-      } else {
-        console.log('🔒 User not authenticated')
-      }
+      } 
       setLoading(false)
     }
 
     checkAuth()
-  }, [])
+  }, [loadUserPuzzles])
 
-  const loadUserPuzzles = async () => {
-    console.log('📊 Loading user puzzles...')
-    try {
-      const puzzlesResponse = await apiService.getPuzzles(1, 1)
-      console.log('📋 Puzzles response:', puzzlesResponse)
-      
-      if (puzzlesResponse.puzzles && puzzlesResponse.puzzles.length > 0) {
-        const recentPuzzle = puzzlesResponse.puzzles[0]
-        console.log('🧩 Recent puzzle found:', {
-          id: recentPuzzle.id,
-          difficulty: recentPuzzle.difficulty,
-          hasPuzzle: !!recentPuzzle.puzzle,
-          hasSolution: !!recentPuzzle.solution
-        })
-        
-        await loadPuzzleData(recentPuzzle)
-      } else {
-        console.log('🆕 No existing puzzles, generating new one...')
-        await generateNewPuzzle()
-      }
-    } catch (error) {
-      console.error('Failed to load user puzzles:', error)
-      console.log('🆕 Error loading puzzles, generating new one...')
-      await generateNewPuzzle()
-    }
-  }
+  // Theme effect
+  useEffect(() => {
+    localStorage.setItem('sudokuTheme', theme)
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
-  const loadPuzzleData = async (puzzleData) => {
-    console.log('📥 Loading puzzle data:', puzzleData.id)
-    
-    // Set all puzzle states in one batch to prevent multiple renders
-    setOriginalPuzzle(puzzleData.puzzle)
-    setPuzzle(puzzleData.puzzle)
-    setUserProgress(puzzleData.puzzle)
-    setSolution(puzzleData.solution)
-    setCurrentPuzzleId(puzzleData.id)
-    setDifficulty(puzzleData.difficulty)
-    
-    // FIXED: Reset hint cells when loading new puzzle (this is correct)
-    setHintCells(new Set())
-    
-    // Reset game stats
-    setGameStats({
-      isComplete: false,
-      correctCells: 0,
-      progress: 0,
-      violations: []
-    })
-    
-    console.log('🎯 Puzzle loaded with ID:', puzzleData.id)
-    
-    // Validate the current state
-    if (puzzleData.puzzle) {
-      await validatePuzzleState(puzzleData.id, puzzleData.puzzle)
-    }
-  }
-
+  // Handle successful events  
   const handleAuthSuccess = (authData) => {
-    console.log('🎉 Auth success:', authData.user.username)
+    console.log('✅ Login successful:', {
+      username: authData.user.username,
+      role: authData.user.role,
+      token: authData.token ? 'present' : 'missing'
+    })
     setUser(authData.user)
     setError('')
     loadUserPuzzles()
   }
 
   const handleLogout = () => {
-    console.log('👋 Logging out...')
+    console.log('👋 User logout')
     apiService.logout()
     setUser(null)
-    setPuzzle(null)
-    setSolution(null)
-    setCurrentPuzzleId(null)
-    setUserProgress(null)
-    setOriginalPuzzle(null)
-    setHintCells(new Set()) // FIXED: Reset hint cells on logout
-    setGameStats({
-      isComplete: false,
-      correctCells: 0,
-      progress: 0,
-      violations: []
-    })
+    clearPuzzleData()
     setError('')
   }
-
-  const generateNewPuzzle = async () => {
-    if (!user) {
-      console.log('❌ Cannot generate puzzle: no user')
-      return
-    }
-    
-    console.log('🎲 Generating new puzzle with difficulty:', difficulty)
-    setGeneratingPuzzle(true)
-    setError('')
-    
-    try {
-      const response = await apiService.generatePuzzle(difficulty, true)
-      console.log('🧩 Generate puzzle response:', response)
-      
-      if (!response.puzzle) {
-        throw new Error('No puzzle data in response')
-      }
-      
-      let puzzleData = {
-        puzzle: null,
-        solution: null,
-        id: null,
-        difficulty: difficulty
-      }
-      
-      // Extract puzzle data from response
-      if (response.puzzle.puzzle) {
-        puzzleData.puzzle = response.puzzle.puzzle
-      } else {
-        puzzleData.puzzle = response.puzzle
-      }
-      
-      puzzleData.solution = response.solution || response.puzzle.solution
-      puzzleData.id = response.savedPuzzle?.id || 
-                     response.puzzleId || 
-                     response.id || 
-                     response.puzzle?.id
-      
-      console.log('✅ Extracted puzzle data:', {
-        hasPuzzle: !!puzzleData.puzzle,
-        hasSolution: !!puzzleData.solution,
-        puzzleId: puzzleData.id
-      })
-      
-      if (!puzzleData.puzzle) {
-        throw new Error('Invalid puzzle data received')
-      }
-      
-      if (!puzzleData.id) {
-        console.log('⏳ No puzzle ID in response, reloading puzzles...')
-        setTimeout(async () => {
-          try {
-            const puzzlesResponse = await apiService.getPuzzles(1, 1)
-            if (puzzlesResponse.puzzles && puzzlesResponse.puzzles.length > 0) {
-              const latestPuzzle = puzzlesResponse.puzzles[0]
-              if (latestPuzzle.difficulty === difficulty) {
-                console.log('🔄 Found newly generated puzzle:', latestPuzzle.id)
-                await loadPuzzleData(latestPuzzle)
-              }
-            }
-          } catch (error) {
-            console.error('Failed to reload puzzle after generation:', error)
-            setError('Puzzle generated but failed to load. Please refresh.')
-          } finally {
-            setGeneratingPuzzle(false)
-          }
-        }, 500)
-        return
-      }
-      
-      await loadPuzzleData(puzzleData)
-      
-    } catch (error) {
-      console.error('Failed to generate puzzle:', error)
-      setError('Failed to generate new puzzle. Please try again.')
-    } finally {
-      setGeneratingPuzzle(false)
-    }
-  }
-
-  const validatePuzzleState = async (puzzleId, puzzleState) => {
-    try {
-      console.log('🔍 Validating puzzle state with ID:', puzzleId)
-      
-      if (!puzzleState || !Array.isArray(puzzleState)) {
-        console.error('❌ Invalid puzzle state for validation')
-        return null
-      }
-      
-      // Sanitize puzzle state
-      const sanitizedState = puzzleState.map((row, rowIndex) => {
-        if (!Array.isArray(row) || row.length !== 9) {
-          console.error(`❌ Invalid row ${rowIndex}:`, row)
-          return new Array(9).fill(0)
-        }
-        return row.map((cell, colIndex) => {
-          if (!Number.isInteger(cell) || cell < 0 || cell > 9) {
-            console.error(`❌ Invalid cell [${rowIndex}][${colIndex}]:`, cell)
-            return 0
-          }
-          return cell
-        })
-      })
-      
-      console.log('✅ Sending sanitized state to API for validation')
-      
-      const result = await apiService.validatePuzzle(puzzleId, sanitizedState)
-      console.log('✅ Validation result:', {
-        valid: result.valid,
-        complete: result.complete,
-        progress: result.progress,
-        violations: result.violations?.length || 0
-      })
-      
-      // Update game stats based on validation
-      setGameStats({
-        isComplete: result.complete || false,
-        correctCells: result.correctCells || 0,
-        progress: result.progress || 0,
-        violations: result.violations || []
-      })
-      
-      return result
-    } catch (error) {
-      console.error('❌ Validation failed:', error)
-      setError('Failed to validate puzzle state')
-      return null
-    }
-  }
-
-  const handleCellChange = async (row, col, value) => {
-    console.log(`🎯 Cell change: [${row}, ${col}] = ${value}`)
-    
-    if (!userProgress || !originalPuzzle) {
-      console.log('❌ Cannot change cell: no progress or original puzzle')
-      return
-    }
-    
-    if (originalPuzzle[row][col] !== 0) {
-      console.log('🔒 Cannot change original puzzle cell')
-      return
-    }
-    
-    const newProgress = userProgress.map(r => [...r])
-    newProgress[row][col] = value
-    
-    setUserProgress(newProgress)
-    setPuzzle(newProgress)
-    
-    if (currentPuzzleId) {
-      console.log('🔍 Validating move...')
-      await validatePuzzleState(currentPuzzleId, newProgress)
-      await updatePuzzleState(newProgress)
-    }
-  }
-
-  const updatePuzzleState = async (newPuzzleState) => {
-    if (!currentPuzzleId) {
-      console.log('❌ Cannot update puzzle state: no puzzle ID')
-      return
-    }
-    
-    console.log('💾 Updating puzzle state for ID:', currentPuzzleId)
-    
-    try {
-      await apiService.updatePuzzle(currentPuzzleId, {
-        puzzle: newPuzzleState,
-        solution: solution
-      })
-      console.log('✅ Puzzle state updated successfully')
-    } catch (error) {
-      console.error('❌ Failed to save puzzle state:', error)
-    }
-  }
-
-  // FIXED: Hint function with persistent yellow highlighting
-  const getHint = async () => {
-    if (!currentPuzzleId || !userProgress) {
-      console.log('❌ Cannot get hint: missing puzzle ID or progress')
-      setError('Cannot get hint: puzzle not loaded properly')
-      return
-    }
-    
-    console.log('💡 Getting hint...')
-    setError('')
-    
-    try {
-      if (!Array.isArray(userProgress) || userProgress.length !== 9) {
-        console.error('❌ userProgress is not a valid 9x9 array:', userProgress)
-        setError('Invalid puzzle state. Please refresh the page.')
-        return
-      }
-
-      const cleanGrid = []
-      
-      for (let i = 0; i < 9; i++) {
-        const row = userProgress[i]
-        if (!Array.isArray(row) || row.length !== 9) {
-          console.error(`❌ Row ${i} is invalid:`, row)
-          setError('Invalid puzzle state. Please refresh the page.')
-          return
-        }
-        
-        const cleanRow = []
-        for (let j = 0; j < 9; j++) {
-          let cellValue = row[j]
-          
-          if (cellValue === null || cellValue === undefined || cellValue === '') {
-            cellValue = 0
-          } else if (typeof cellValue === 'string') {
-            cellValue = parseInt(cellValue, 10)
-            if (isNaN(cellValue)) cellValue = 0
-          } else if (typeof cellValue === 'number') {
-            cellValue = Math.floor(cellValue)
-          } else {
-            console.warn(`Unexpected cell type at [${i}][${j}]:`, typeof cellValue, cellValue)
-            cellValue = 0
-          }
-          
-          if (cellValue < 0 || cellValue > 9) {
-            console.warn(`Invalid cell value at [${i}][${j}]:`, cellValue, '-> using 0')
-            cellValue = 0
-          }
-          
-          cleanRow.push(cellValue)
-        }
-        cleanGrid.push(cleanRow)
-      }
-      
-      const isValidGrid = cleanGrid.length === 9 && 
-                        cleanGrid.every(row => 
-                          Array.isArray(row) && row.length === 9 && 
-                          row.every(cell => Number.isInteger(cell) && cell >= 0 && cell <= 9)
-                        )
-      
-      if (!isValidGrid) {
-        console.error('❌ Clean grid is still invalid:', cleanGrid)
-        setError('Unable to format puzzle state properly. Please refresh the page.')
-        return
-      }
-      
-      console.log('💡 Sending hint request with clean state:', {
-        puzzleId: currentPuzzleId,
-        gridValid: isValidGrid,
-        dimensions: `${cleanGrid.length}x${cleanGrid[0].length}`,
-        sampleRow: cleanGrid[0],
-        allIntegers: cleanGrid.flat().every(cell => Number.isInteger(cell))
-      })
-      
-      const requestPayload = {
-        currentState: cleanGrid,
-        hint: true
-      }
-      
-      // Test JSON serialization
-      try {
-        const testSerialization = JSON.stringify(requestPayload)
-        const testDeserialization = JSON.parse(testSerialization)
-        console.log('💡 Serialization test passed:', {
-          originalLength: requestPayload.currentState.length,
-          serializedLength: testDeserialization.currentState.length,
-          firstCellsMatch: requestPayload.currentState[0][0] === testDeserialization.currentState[0][0]
-        })
-      } catch (serError) {
-        console.error('❌ Serialization test failed:', serError)
-        setError('Unable to prepare request data. Please refresh the page.')
-        return
-      }
-      
-      const hintResponse = await apiService.solvePuzzle(currentPuzzleId, requestPayload)
-      
-      console.log('💡 Hint response received:', hintResponse)
-      
-      if (hintResponse && hintResponse.hint) {
-        const { row, col, value } = hintResponse.hint
-        
-        console.log(`💡 Applying hint: [${row}, ${col}] = ${value}`)
-        
-        // Validate hint values
-        if (
-          !Number.isInteger(row) || row < 0 || row > 8 ||
-          !Number.isInteger(col) || col < 0 || col > 8 ||
-          !Number.isInteger(value) || value < 1 || value > 9
-        ) {
-          console.error('❌ Invalid hint values:', { row, col, value })
-          setError('Received invalid hint from server')
-          return
-        }
-        
-        // FIXED: Add hint cell to tracking set (without auto-removal timer)
-        const hintKey = `${row}-${col}`
-        setHintCells(prev => new Set([...prev, hintKey]))
-        
-        // REMOVED: Auto-removal timer - hints now persist!
-        
-        const newProgress = cleanGrid.map(r => [...r])
-        newProgress[row][col] = value
-        
-        setUserProgress(newProgress)
-        setPuzzle(newProgress)
-        
-        // Update validation and save state
-        await validatePuzzleState(currentPuzzleId, newProgress)
-        await updatePuzzleState(newProgress)
-        
-        console.log(`💡 Hint applied successfully: [${row}, ${col}] = ${value}`)
-        setError('')
-        
-      } else if (hintResponse && hintResponse.message) {
-        console.log('💡 Server message:', hintResponse.message)
-        setError(hintResponse.message)
-      } else {
-        console.log('💡 No hints available in response')
-        setError('No hints available for this puzzle')
-      }
-      
-    } catch (error) {
-      console.error('❌ Failed to get hint:', error)
-      
-      let errorMessage = 'Failed to get hint. '
-      
-      try {
-        if (error.message.includes('Validation failed')) {
-          errorMessage += 'The puzzle data format was rejected. '
-          
-          console.error('❌ Validation failed. Debug info:', {
-            userProgressType: typeof userProgress,
-            userProgressSample: userProgress?.[0]?.slice(0, 3),
-            puzzleId: currentPuzzleId,
-            errorDetails: error.message
-          })
-          
-          errorMessage += 'Please refresh the page and try again.'
-        } else if (error.message.includes('Invalid puzzle ID')) {
-          errorMessage += 'Puzzle ID is invalid. Please try loading a new puzzle.'
-        } else if (error.message.includes('Unauthorized')) {
-          errorMessage += 'Please log in again.'
-          handleLogout()
-          return
-        } else if (error.message.includes('not found')) {
-          errorMessage += 'Puzzle not found on server. Try generating a new puzzle.'
-        } else if (error.message.includes('Server error')) {
-          errorMessage += 'Server is experiencing issues. Please try again in a moment.'
-        } else {
-          errorMessage += 'Please try again or refresh the page.'
-        }
-      } catch (parseError) {
-        console.error('Error parsing error:', parseError)
-        errorMessage += 'Please try again or refresh the page.'
-      }
-      
-      setError(errorMessage)
-    }
-  }
-
-  const solvePuzzle = async () => {
-    if (!currentPuzzleId || !userProgress) {
-      console.log('❌ Cannot solve puzzle: missing puzzle ID or progress')
-      return
-    }
-    
-    console.log('🔍 Solving puzzle...')
-    
-    try {
-      const sanitizedState = userProgress.map((row, rowIndex) => {
-        if (!Array.isArray(row) || row.length !== 9) {
-          console.error(`❌ Invalid row ${rowIndex} in userProgress:`, row)
-          return new Array(9).fill(0)
-        }
-        return row.map((cell, colIndex) => {
-          const numCell = parseInt(cell, 10)
-          if (isNaN(numCell) || numCell < 0 || numCell > 9) {
-            console.error(`❌ Invalid cell [${rowIndex}][${colIndex}]:`, cell)
-            return 0
-          }
-          return numCell
-        })
-      })
-      
-      const solutionResponse = await apiService.solvePuzzle(currentPuzzleId, {
-        currentState: sanitizedState,
-        hint: false
-      })
-      
-      console.log('🔍 Solve response:', solutionResponse)
-      
-      if (solutionResponse.solution) {
-        setUserProgress(solutionResponse.solution)
-        setPuzzle(solutionResponse.solution)
-        
-        // FIXED: Clear hint highlighting when puzzle is solved (this is correct)
-        setHintCells(new Set())
-        
-        setGameStats({
-          isComplete: true,
-          correctCells: 81,
-          progress: 100,
-          violations: []
-        })
-        
-        await updatePuzzleState(solutionResponse.solution)
-        
-        console.log('🎉 Puzzle solved!')
-      }
-    } catch (error) {
-      console.error('❌ Failed to solve puzzle:', error)
-      setError('Failed to solve puzzle. Please try again.')
-    }
-  }
-
-  const resetPuzzle = () => {
-    console.log('🔄 Resetting puzzle...')
-    if (originalPuzzle) {
-      setUserProgress(originalPuzzle)
-      setPuzzle(originalPuzzle)
-      setHintCells(new Set()) // FIXED: Clear hint highlighting on reset (this is correct)
-      setGameStats({
-        isComplete: false,
-        correctCells: 0,
-        progress: 0,
-        violations: []
-      })
-      updatePuzzleState(originalPuzzle)
-      console.log('✅ Puzzle reset to original state')
-    } else {
-      console.log('❌ Cannot reset: no original puzzle')
-    }
-  }
-
-  const handleDifficultyChange = (newDifficulty) => {
-    console.log('🎚️ Difficulty changed to:', newDifficulty)
-    setDifficulty(newDifficulty)
-  }
-
-  useEffect(() => {
-    localStorage.setItem('sudokuTheme', theme)
-    document.documentElement.setAttribute('data-theme', theme)
-  }, [theme])
 
   const toggleTheme = () => {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light')
   }
 
+  // Game action handlers
+  const handleGetHint = () => {
+    getHint()
+  }
+
+  const handleSolvePuzzle = () => {
+    solvePuzzle()
+  }
+
+  const handleResetPuzzle = () => {
+    resetPuzzle()
+  }
+
+  const handleGenerateNewPuzzle = () => {
+    generateNewPuzzle()
+  }
+
+  const handleDeletePuzzle = () => {
+    deletePuzzle()
+  }
+  
+  // Loading state
   if (loading) {
     return (
       <div className="app-container loading">
@@ -619,6 +152,7 @@ function App() {
     )
   }
 
+  // Not logged in state
   if (!user) {
     return (
       <div 
@@ -638,6 +172,7 @@ function App() {
     )
   }
 
+  // Main app content
   return (
     <div 
       className="app-container"
@@ -660,6 +195,9 @@ function App() {
               Welcome, <strong>{user.username}</strong>!
               {user.role === 'admin' && (
                 <span className="admin-badge">Admin</span>
+              )}
+              {user.role === 'visitor' && (
+                <span className="visitor-badge">Visitor</span>
               )}
             </span>
           )}
@@ -700,7 +238,7 @@ function App() {
           />
           <button 
             className="new-game-btn" 
-            onClick={generateNewPuzzle}
+            onClick={handleGenerateNewPuzzle}
             disabled={generatingPuzzle}
           >
             {generatingPuzzle ? (
@@ -712,88 +250,96 @@ function App() {
               'New Game'
             )}
           </button>
+          
+          {/* Delete button (admin only) */}
+          {user?.role === 'admin' && currentPuzzleId && (
+            <button 
+              className="delete-btn" 
+              onClick={handleDeletePuzzle}
+              disabled={deleting || generatingPuzzle}
+              title="Delete current puzzle (Admin only)"
+            >
+              {deleting ? (
+                <span className="button-loading">
+                  <span className="spinner small"></span>
+                  Deleting...
+                </span>
+              ) : (
+                '🗑️ Delete'
+              )}
+            </button>
+          )}
         </div>
 
-        {/* Enhanced Debug Info */}
-        <div style={{ 
-          background: 'rgba(0,0,0,0.1)', 
-          padding: '10px', 
-          margin: '10px 0', 
-          borderRadius: '5px',
-          fontSize: '12px',
-          fontFamily: 'monospace'
-        }}>
-          <div>🆔 Puzzle ID: {currentPuzzleId || 'null'}</div>
-          <div>🎚️ Difficulty: {difficulty}</div>
-          <div>🧩 Puzzle: {puzzle ? 'Loaded' : 'None'}</div>
-          <div>🎯 Solution: {solution ? 'Available' : 'Missing'}</div>
-          <div>📊 Progress: {userProgress ? 'Tracked' : 'None'}</div>
-          <div>🔄 Status: {generatingPuzzle ? 'Generating...' : 'Ready'}</div>
-          <div>✅ Complete: {gameStats.isComplete ? 'Yes' : 'No'}</div>
-          <div>📈 Progress: {gameStats.progress}% ({gameStats.correctCells}/81)</div>
-          <div>💡 Hint Cells: {hintCells.size} active (persistent)</div>
-          <div>🐛 UserProgress Valid: {userProgress ? 
-            `${Array.isArray(userProgress) ? userProgress.length : 'Not Array'}x${Array.isArray(userProgress?.[0]) ? userProgress[0].length : 'Invalid'}` 
-            : 'None'}</div>
-        </div>
+        {/* Admin-only Debug Info */}
+        {user?.role === 'admin' && (
+          <div style={{ 
+            background: 'rgba(0,0,0,0.1)', 
+            padding: '10px', 
+            margin: '10px 0', 
+            borderRadius: '5px',
+            fontSize: '12px',
+            fontFamily: 'monospace'
+          }}>
+            <div>Puzzle ID: {currentPuzzleId || 'null'}</div>
+            <div>Difficulty: {difficulty}</div>
+            <div>Progress: {userProgress ? 'Tracked' : 'None'}</div>
+            <div>Complete: {gameStats.isComplete ? 'Yes' : 'No'}</div>
+            <div>Progress: {gameStats.progress}% ({gameStats.correctCells}/81)</div>
+            <div>Hint Cells: {hintCells.size} active</div>
+          </div> 
+        )}
 
         {gameStats && puzzle && (
           <div className="game-stats">
             <div className="progress-info">
-              <span>Progress: {gameStats.progress}%</span>
-              <span>Correct: {gameStats.correctCells}/81</span>
+              <span><strong>Steps to solve: {81 - gameStats.correctCells}</strong></span>
               {gameStats.isComplete && <span className="completed">🎉 Completed!</span>}
             </div>
-            {gameStats.violations && gameStats.violations.length > 0 && (
-              <div className="violations">
-                <span className="violations-count">⚠️ {gameStats.violations.length} error(s)</span>
-              </div>
-            )}
           </div>
         )}
 
-        {puzzle && !gameStats.isComplete && (
-          <div className="game-actions">
-            <button 
-              className="hint-btn" 
-              onClick={getHint}
-              disabled={generatingPuzzle || !solution || !currentPuzzleId}
-              title={
-                !solution ? "Solution not available for hints" : 
-                !currentPuzzleId ? "Puzzle ID missing" :
-                "Get a hint (will stay highlighted until new game/reset)"
-              }
-            >
-              💡 Hint
-            </button>
-            <button 
-              className="solve-btn" 
-              onClick={solvePuzzle}
-              disabled={generatingPuzzle}
-            >
-              🔍 Solve
-            </button>
-            <button 
-              className="reset-btn" 
-              onClick={resetPuzzle}
-              disabled={generatingPuzzle}
-            >
-              🔄 Reset
-            </button>
+        {puzzle && (
+          <div className="game-container">
+            <SudokuBoard
+              puzzle={puzzle}
+              solution={solution}
+              userProgress={userProgress}
+              onCellChange={handleCellChange}
+              hintCells={hintCells}
+              isComplete={gameStats?.isComplete}
+              originalPuzzle={originalPuzzle}
+            />
+            
+            <div className="game-actions">
+              <button 
+                className="hint-btn"
+                onClick={handleGetHint}
+                disabled={!puzzle || gameStats?.isComplete}
+                title="Get a hint for an empty cell"
+              >
+                💡 Hint
+              </button>
+              
+              <button 
+                className="solve-btn"
+                onClick={handleSolvePuzzle}
+                disabled={!puzzle || gameStats?.isComplete}
+                title="Show the complete solution"
+              >
+                🎯 Solve
+              </button>
+              
+              <button 
+                className="reset-btn"
+                onClick={handleResetPuzzle}
+                disabled={!puzzle}
+                title="Reset to original puzzle"
+              >
+                🔄 Reset
+              </button>
+            </div>
           </div>
-        )}
-
-        {puzzle && solution && (
-          <SudokuBoard 
-            puzzle={puzzle} 
-            originalPuzzle={originalPuzzle}
-            solution={solution}
-            onCellChange={handleCellChange}
-            disabled={generatingPuzzle}
-            violations={gameStats.violations}
-            isComplete={gameStats.isComplete}
-            hintCells={hintCells} // FIXED: Pass persistent hint cells to board
-          />
         )}
 
         {!puzzle && !generatingPuzzle && (
