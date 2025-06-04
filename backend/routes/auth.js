@@ -186,6 +186,109 @@ router.post('/login', [
 
 /**
  * @swagger
+ * /api/auth/token:
+ *   post:
+ *     summary: Get JWT token with role permissions
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Token generated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *                 role:
+ *                   type: string
+ *                 permissions:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 expiresIn:
+ *                   type: string
+ *       401:
+ *         description: Invalid credentials
+ */
+router.post('/token', [
+    body('username').notEmpty().withMessage('Username is required'),
+    body('password').notEmpty().withMessage('Password is required')
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ 
+                error: 'Validation failed',
+                details: errors.array()
+            });
+        }
+
+        const { username, password } = req.body;
+
+        // Find user
+        const user = await User.findByUsername(username);
+        if (!user) {
+            return res.status(401).json({ 
+                error: 'Invalid credentials',
+                code: 'INVALID_CREDENTIALS'
+            });
+        }
+
+        // Validate password
+        const isValidPassword = await User.validatePassword(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ 
+                error: 'Invalid credentials',
+                code: 'INVALID_CREDENTIALS'
+            });
+        }
+
+        // Generate tokens
+        const tokens = JWTUtils.generateTokens(user);
+
+        // Define role-based permissions
+        const rolePermissions = {
+            visitor: ['read'],
+            user: ['read', 'write'],
+            admin: ['read', 'write', 'delete', 'manage']
+        };
+
+        res.json({
+            token: tokens.token,
+            refreshToken: tokens.refreshToken,
+            role: user.role,
+            permissions: rolePermissions[user.role] || [],
+            expiresIn: '1h'
+        });
+
+    } catch (error) {
+        console.error('Token generation error:', error);
+        res.status(500).json({ 
+            error: 'Token generation failed',
+            code: 'TOKEN_GENERATION_ERROR'
+        });
+    }
+});
+
+/**
+ * @swagger
  * /api/auth/token/verify:
  *   post:
  *     summary: Verify JWT token
